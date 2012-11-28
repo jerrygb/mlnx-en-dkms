@@ -1,0 +1,12 @@
+Index: ofed_kernel/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2010-12-22 10:44:30.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2010-12-22 10:50:52.000000000 +0200
+@@ -37,6 +37,7 @@
+ #include <linux/icmpv6.h>
+ #include <linux/delay.h>
+ #include <linux/vmalloc.h>
++#include <linux/random.h>
+ 
+ #include "ipoib.h"
+ 

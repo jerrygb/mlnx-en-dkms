@@ -1,0 +1,31 @@
+From 7bda76b94566a1e42a648da1a7d778113665aff2 Mon Sep 17 00:00:00 2001
+From: Dotan Barak <dotanb@dev.mellanox.co.il>
+Date: Tue, 27 Sep 2011 14:07:21 +0300
+Subject: [PATCH] libfc: fix compilation warning
+
+Fix the following compilation warning:
+drivers/scsi/libfc/fc_exch.c: In function 'fc_exch_recv_req':
+drivers/scsi/libfc/fc_exch.c:1239: warning: unused variable 'fh'
+
+Signed-off-by: Dotan Barak <dotanb@dev.mellanox.co.il>
+---
+ drivers/scsi/libfc/fc_exch.c |    2 ++
+ 1 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/scsi/libfc/fc_exch.c b/drivers/scsi/libfc/fc_exch.c
+index a70c1bd..a027c28 100644
+--- a/drivers/scsi/libfc/fc_exch.c
++++ b/drivers/scsi/libfc/fc_exch.c
+@@ -1236,7 +1236,9 @@ free:
+ static void fc_exch_recv_req(struct fc_lport *lport, struct fc_exch_mgr *mp,
+ 			     struct fc_frame *fp)
+ {
++#if 0
+ 	struct fc_frame_header *fh = fc_frame_header_get(fp);
++#endif
+ 	struct fc_seq *sp = NULL;
+ 	struct fc_exch *ep = NULL;
+ 	enum fc_pf_rjt_reason reject;
+-- 
+1.7.4.1
+

@@ -1,0 +1,25 @@
+From 9c6d53f252dea71eaba38b45f28fa0045c20f7bb Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Mon, 25 Jul 2011 14:25:29 +0300
+Subject: [PATCH] mlx4_en: trans_start is updated in queuing function
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+---
+ drivers/net/mlx4/en_tx.c |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index d753fdc..7ce83bf 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -827,7 +827,6 @@ int mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
+ 		wmb();
+ 		writel(ring->doorbell_qpn, ring->bf.uar->map + MLX4_SEND_DOORBELL);
+ 	}
+-	dev->trans_start = jiffies;
+ 
+ 	/* Poll CQ here if we are running in polling mode */
+ 	if (ring->polling)
+-- 
+1.5.4.3
+

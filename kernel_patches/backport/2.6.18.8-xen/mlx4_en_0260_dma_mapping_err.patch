@@ -1,0 +1,49 @@
+From f87f0f15b02f00ef6f8c3551b780986e5d52118d Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Wed, 15 Aug 2012 11:40:34 +0300
+Subject: [PATCH] mlx4_en: dma_mapping backport
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+---
+ drivers/net/mlx4/en_rx.c |    2 +-
+ drivers/net/mlx4/en_tx.c |    4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index 0ed3806..00b945e 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -79,7 +79,7 @@ static int mlx4_en_alloc_frag(struct mlx4_en_priv *priv,
+ 	dma = dma_map_single(priv->ddev, page_address(skb_frags[i].page) +
+ 			     skb_frags[i].page_offset, frag_info->frag_size,
+ 			     PCI_DMA_FROMDEVICE);
+-	if (unlikely(dma_mapping_error(priv->ddev, dma))) {
++	if (unlikely(dma_mapping_error(dma))) {
+ 		en_err(priv, "Failed dma mapping page for RX buffer\n");
+ 		put_page(page);
+ 		if (new_page)
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index 611d605..4f8f806 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -810,7 +810,7 @@ int mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
+ 			frag = &skb_shinfo(skb)->frags[i];
+ 			dma = dma_map_page(ddev, frag->page, frag->page_offset,
+ 					   frag->size, PCI_DMA_TODEVICE);
+-			if (unlikely(dma_mapping_error(ddev, dma)))
++			if (unlikely(dma_mapping_error(dma)))
+ 				goto err_dma;
+ 			data->addr = cpu_to_be64(dma);
+ 			data->lkey = cpu_to_be32(mr->key);
+@@ -823,7 +823,7 @@ int mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
+ 		if (tx_info->linear) {
+ 			dma = dma_map_single(ddev, skb->data + lso_header_size,
+ 					     skb_headlen(skb) - lso_header_size, PCI_DMA_TODEVICE);
+-			if (unlikely(dma_mapping_error(ddev, dma)))
++			if (unlikely(dma_mapping_error(dma)))
+ 				goto err_dma;
+ 			data->addr = cpu_to_be64(dma);
+ 			data->lkey = cpu_to_be32(mr->key);
+-- 
+1.7.8.2
+

@@ -1,0 +1,45 @@
+ib/iser: issue dma unmapping on the TX buffers used for the iSCSI and iSER headers
+
+The current code never did DMA unmapping on these buffers. Fix that
+by adding unmapping to the task cleanup callback, and mapping on
+each time the task init function is called (drop the headers_initialized
+micro-optimization). What we really want here is dma_sync, but currently
+there's no flow to call dma_unmap when the session goes down, TBD.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c |   13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-07 03:30:04.000000000 -0400
++++ ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-07 05:19:43.000000000 -0400
+@@ -150,7 +150,9 @@ int iser_initialize_task_headers(struct 
+ 	tx_desc->tx_sg[0].length = ISER_HEADERS_LEN;
+ 	tx_desc->tx_sg[0].lkey   = device->mr->lkey;
+ 
+-	iser_task->headers_initialized	= 1;
++	/* don't set that bit such that dma mapping would take
++	place on each usage of the descriptor */
++	/* iser_task->headers_initialized	= 1; */
+ 	iser_task->iser_conn		= iser_conn;
+ 	return 0;
+ }
+@@ -277,6 +279,15 @@ iscsi_iser_task_xmit(struct iscsi_task *
+ static void iscsi_iser_cleanup_task(struct iscsi_task *task)
+ {
+ 	struct iscsi_iser_task *iser_task = task->dd_data;
++	struct iser_tx_desc	*tx_desc = &iser_task->desc;
++
++	struct iscsi_iser_conn *iser_conn = task->conn->dd_data;
++	struct iser_device     *device    = iser_conn->ib_conn->device;
++
++	iser_dbg("task %p itt 0x%x sc %p\n",task, task->itt, task->sc);
++
++	ib_dma_unmap_single(device->ib_device,
++		tx_desc->dma_addr, ISER_HEADERS_LEN, DMA_TO_DEVICE);
+ 
+ 	/* mgmt tasks do not need special cleanup */
+ 	if (!task->sc)

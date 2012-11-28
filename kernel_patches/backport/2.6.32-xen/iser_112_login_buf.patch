@@ -1,0 +1,169 @@
+ib/iser: use separate buffers for the login request/response
+
+The current code counted on the transactional nature of iscsi 
+login/text flows and used the same buffer and dma mapping
+for both the request and the reply, which violates the DMA
+mapping API, fix that by using different buffers and two
+DMA mapping each with the correct directions
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.h     |    3 +-
+ drivers/infiniband/ulp/iser/iser_initiator.c |   31 +++++++++++++++++-----
+ drivers/infiniband/ulp/iser/iser_verbs.c     |   38 ++++++++++++++++++++++-----
+ 3 files changed, 57 insertions(+), 15 deletions(-)
+
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.h
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iscsi_iser.h	2011-08-07 02:26:49.000000000 -0400
++++ ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.h	2011-08-07 02:26:58.000000000 -0400
+@@ -256,7 +256,8 @@ struct iser_conn {
+ 	struct list_head	     conn_list;       /* entry in ig conn list */
+ 
+ 	char  			     *login_buf;
+-	u64 			     login_dma;
++	char			     *login_req_buf, *login_resp_buf;
++	u64			     login_req_dma, login_resp_dma;
+ 	unsigned int 		     rx_desc_head;
+ 	struct iser_rx_desc	     *rx_descs;
+ 	struct ib_recv_wr	     rx_wr[ISER_MIN_POSTED_RX];
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iser_initiator.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iser_initiator.c	2011-08-07 02:26:51.000000000 -0400
++++ ofed_kernel/drivers/infiniband/ulp/iser/iser_initiator.c	2011-08-07 02:57:49.000000000 -0400
+@@ -221,8 +221,14 @@ void iser_free_rx_descriptors(struct ise
+ 	struct iser_device *device = ib_conn->device;
+ 
+ 	if (ib_conn->login_buf) {
+-		ib_dma_unmap_single(device->ib_device, ib_conn->login_dma,
+-			ISER_RX_LOGIN_SIZE, DMA_FROM_DEVICE);
++		if (ib_conn->login_req_dma)
++			ib_dma_unmap_single(device->ib_device,
++				ib_conn->login_req_dma,
++				ISCSI_DEF_MAX_RECV_SEG_LEN, DMA_TO_DEVICE);
++		if (ib_conn->login_resp_dma)
++			ib_dma_unmap_single(device->ib_device,
++				ib_conn->login_resp_dma,
++				ISER_RX_LOGIN_SIZE, DMA_FROM_DEVICE);
+ 		kfree(ib_conn->login_buf);
+ 	}
+ 
+@@ -394,6 +400,7 @@ int iser_send_control(struct iscsi_conn 
+ 	unsigned long data_seg_len;
+ 	int err = 0;
+ 	struct iser_device *device;
++	struct iser_conn *ib_conn = iser_conn->ib_conn;
+ 
+ 	/* build the tx desc regd header and add it to the tx desc dto */
+ 	mdesc->type = ISCSI_TX_CONTROL;
+@@ -409,9 +416,19 @@ int iser_send_control(struct iscsi_conn 
+ 			iser_err("data present on non login task!!!\n");
+ 			goto send_control_error;
+ 		}
+-		memcpy(iser_conn->ib_conn->login_buf, task->data,
++
++		ib_dma_sync_single_for_cpu(device->ib_device,
++			ib_conn->login_req_dma, task->data_count,
++			DMA_TO_DEVICE);
++
++		memcpy(iser_conn->ib_conn->login_req_buf, task->data,
+ 							task->data_count);
+-		tx_dsg->addr    = iser_conn->ib_conn->login_dma;
++
++		ib_dma_sync_single_for_device(device->ib_device,
++			ib_conn->login_req_dma, task->data_count,
++			DMA_TO_DEVICE);
++
++		tx_dsg->addr    = iser_conn->ib_conn->login_req_dma;
+ 		tx_dsg->length  = task->data_count;
+ 		tx_dsg->lkey    = device->mr->lkey;
+ 		mdesc->num_sge = 2;
+@@ -445,8 +462,8 @@ void iser_rcv_completion(struct iser_rx_
+ 	int rx_buflen, outstanding, count, err;
+ 
+ 	/* differentiate between login to all other PDUs */
+-	if ((char *)rx_desc == ib_conn->login_buf) {
+-		rx_dma = ib_conn->login_dma;
++	if ((char *)rx_desc == ib_conn->login_resp_buf) {
++		rx_dma = ib_conn->login_resp_dma;
+ 		rx_buflen = ISER_RX_LOGIN_SIZE;
+ 	} else {
+ 		rx_dma = rx_desc->dma_addr;
+@@ -473,7 +490,7 @@ void iser_rcv_completion(struct iser_rx_
+ 	 * for the posted rx bufs refcount to become zero handles everything   */
+ 	conn->ib_conn->post_recv_buf_count--;
+ 
+-	if (rx_dma == ib_conn->login_dma)
++	if (rx_dma == ib_conn->login_resp_dma)
+ 		return;
+ 
+ 	outstanding = ib_conn->post_recv_buf_count;
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-07 02:26:45.000000000 -0400
++++ ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-07 02:37:15.000000000 -0400
+@@ -154,20 +154,44 @@ static int iser_create_ib_conn_res(struc
+ {
+ 	struct iser_device	*device;
+ 	struct ib_qp_init_attr	init_attr;
+-	int			ret = -ENOMEM;
++	int			req_err, resp_err, ret = -ENOMEM;
+ 	struct ib_fmr_pool_param params;
+ 
+ 	BUG_ON(ib_conn->device == NULL);
+ 
+ 	device = ib_conn->device;
+ 
+-	ib_conn->login_buf = kmalloc(ISER_RX_LOGIN_SIZE, GFP_KERNEL);
++	ib_conn->login_buf = kmalloc(ISCSI_DEF_MAX_RECV_SEG_LEN +
++					ISER_RX_LOGIN_SIZE, GFP_KERNEL);
+ 	if (!ib_conn->login_buf)
+ 		goto out_err;
+ 
+-	ib_conn->login_dma = ib_dma_map_single(ib_conn->device->ib_device,
+-				(void *)ib_conn->login_buf, ISER_RX_LOGIN_SIZE,
+-				DMA_FROM_DEVICE);
++	ib_conn->login_req_buf  = ib_conn->login_buf;
++	ib_conn->login_resp_buf = ib_conn->login_buf + ISCSI_DEF_MAX_RECV_SEG_LEN;
++
++	ib_conn->login_req_dma = ib_dma_map_single(ib_conn->device->ib_device,
++				(void *)ib_conn->login_req_buf,
++				ISCSI_DEF_MAX_RECV_SEG_LEN, DMA_TO_DEVICE);
++
++	ib_conn->login_resp_dma = ib_dma_map_single(ib_conn->device->ib_device,
++				(void *)ib_conn->login_resp_buf,
++				ISER_RX_LOGIN_SIZE, DMA_FROM_DEVICE);
++
++	req_err  = ib_dma_mapping_error(device->ib_device, ib_conn->login_req_dma);
++	resp_err = ib_dma_mapping_error(device->ib_device, ib_conn->login_resp_dma);
++
++	iser_err("login buf %p size %d kvirt/dma - req %p/%llx resp %p/%llx dma err %d/%d\n",
++		ib_conn->login_buf, ISCSI_DEF_MAX_RECV_SEG_LEN+ISER_RX_LOGIN_SIZE,
++		ib_conn->login_req_buf, ib_conn->login_req_dma,
++		ib_conn->login_resp_buf, ib_conn->login_resp_dma, req_err, resp_err);
++
++	if (req_err || resp_err) {
++		if (req_err)
++			 ib_conn->login_req_dma = 0;
++		if (resp_err)
++			 ib_conn->login_resp_dma = 0;
++		goto out_err;
++	}
+ 
+ 	ib_conn->page_vec = kmalloc(sizeof(struct iser_page_vec) +
+ 				    (sizeof(u64) * (ISCSI_ISER_SG_TABLESIZE +1)),
+@@ -657,11 +681,11 @@ int iser_post_recvl(struct iser_conn *ib
+ 	struct ib_sge	  sge;
+ 	int ib_ret;
+ 
+-	sge.addr   = ib_conn->login_dma;
++	sge.addr   = ib_conn->login_resp_dma;
+ 	sge.length = ISER_RX_LOGIN_SIZE;
+ 	sge.lkey   = ib_conn->device->mr->lkey;
+ 
+-	rx_wr.wr_id   = (unsigned long)ib_conn->login_buf;
++	rx_wr.wr_id   = (unsigned long)ib_conn->login_resp_buf;
+ 	rx_wr.sg_list = &sge;
+ 	rx_wr.num_sge = 1;
+ 	rx_wr.next    = NULL;

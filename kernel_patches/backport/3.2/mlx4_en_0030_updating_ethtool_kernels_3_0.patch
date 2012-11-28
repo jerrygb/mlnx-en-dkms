@@ -1,0 +1,110 @@
+From e899c50d0eeb4d4be3bc1c5f8a24638e029e4009 Mon Sep 17 00:00:00 2001
+From: Alexander Guller <alexg@mellanox.com>
+Date: Wed, 9 Nov 2011 10:57:27 +0200
+Subject: [PATCH] mlx4_en: Updating ethtool_ops for kernels 3.0+
+
+Removed deprecated functions and verify counters.
+
+Signed-off-by: Alexander Guller <alexg@mellanox.com>
+---
+ drivers/net/mlx4/en_ethtool.c |   23 +----------------------
+ drivers/net/mlx4/en_netdev.c  |    1 -
+ drivers/net/mlx4/en_rx.c      |    3 ++-
+ drivers/net/mlx4/mlx4_en.h    |    3 +--
+ 4 files changed, 4 insertions(+), 26 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_ethtool.c b/drivers/net/mlx4/en_ethtool.c
+index e392e2f..2882ec0 100644
+--- a/drivers/net/mlx4/en_ethtool.c
++++ b/drivers/net/mlx4/en_ethtool.c
+@@ -124,19 +124,6 @@ static int mlx4_en_set_tso(struct net_device *dev, u32 data)
+ 	return 0;
+ }
+ 
+-static u32 mlx4_en_get_rx_csum(struct net_device *dev)
+-{
+-	struct mlx4_en_priv *priv = netdev_priv(dev);
+-	return priv->rx_csum;
+-}
+-
+-static int mlx4_en_set_rx_csum(struct net_device *dev, u32 data)
+-{
+-	struct mlx4_en_priv *priv = netdev_priv(dev);
+-	priv->rx_csum = (data != 0);
+-	return 0;
+-}
+-
+ static const char main_strings[][ETH_GSTRING_LEN] = {
+ 	"rx_packets", "tx_packets", "rx_bytes", "tx_bytes", "rx_errors",
+ 	"tx_errors", "rx_dropped", "tx_dropped", "multicast", "collisions",
+@@ -565,13 +552,7 @@ const struct ethtool_ops mlx4_en_ethtool_ops = {
+ 	.get_tso = mlx4_en_get_tso,
+ 	.set_tso = mlx4_en_set_tso,
+ #endif
+-	.get_sg = ethtool_op_get_sg,
+-	.set_sg = ethtool_op_set_sg,
+ 	.get_link = ethtool_op_get_link,
+-	.get_rx_csum = mlx4_en_get_rx_csum,
+-	.set_rx_csum = mlx4_en_set_rx_csum,
+-	.get_tx_csum = ethtool_op_get_tx_csum,
+-	.set_tx_csum = ethtool_op_set_tx_ipv6_csum,
+ 	.get_strings = mlx4_en_get_strings,
+ 	.get_sset_count = mlx4_en_get_sset_count,
+ 	.get_ethtool_stats = mlx4_en_get_ethtool_stats,
+@@ -586,8 +567,6 @@ const struct ethtool_ops mlx4_en_ethtool_ops = {
+ 	.set_pauseparam = mlx4_en_set_pauseparam,
+ 	.get_ringparam = mlx4_en_get_ringparam,
+ 	.set_ringparam = mlx4_en_set_ringparam,
+-	.get_flags = ethtool_op_get_flags,
+-	.set_flags = ethtool_op_set_flags,
+ };
+ 
+ 
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 96cf0f9..8b781f9 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1316,7 +1316,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	priv->port = port;
+ 	priv->port_up = false;
+ 	priv->port_inited = false;
+-	priv->rx_csum = 1;
+ 	priv->flags = prof->flags;
+ 	priv->tx_ring_num = prof->tx_ring_num;
+ 	priv->rx_ring_num = prof->rx_ring_num;
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index 8a87c13..e26a336 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -553,6 +553,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 	unsigned int length;
+ 	int polled = 0;
+ 	int ip_summed;
++	int rx_csum = dev->features & NETIF_F_RXCSUM;
+ 	int factor = priv->cqe_factor;
+ 	u32 cons_index = mcq->cons_index;
+ 	u32 size_mask = ring->size_mask;
+@@ -595,7 +596,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 		ring->bytes += length;
+ 		ring->packets++;
+ 
+-		if (likely(priv->rx_csum)) {
++		if (likely(rx_csum)) {
+ 			if ((cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPOK)) &&
+ 			    (cqe->checksum == 0xffff)) {
+ 				csum_ok++;
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 84d3c86..93437b8 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -504,7 +504,6 @@ struct mlx4_en_priv {
+ 	int registered;
+ 	bool resources_allocated;
+ 	int allocated;
+-	int rx_csum;
+ 	u64 mac;
+ 	int mac_index;
+ 	unsigned max_mtu;
+-- 
+1.7.5.4
+

@@ -1,0 +1,12 @@
+Index: ofed_kernel/drivers/infiniband/hw/cxgb3/iwch.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/hw/cxgb3/iwch.c	2010-12-22 11:39:44.000000000 +0200
++++ ofed_kernel/drivers/infiniband/hw/cxgb3/iwch.c	2010-12-22 11:47:50.000000000 +0200
+@@ -31,6 +31,7 @@
+  */
+ #include <linux/module.h>
+ #include <linux/moduleparam.h>
++#include <linux/random.h>
+ 
+ #include <rdma/ib_verbs.h>
+ 

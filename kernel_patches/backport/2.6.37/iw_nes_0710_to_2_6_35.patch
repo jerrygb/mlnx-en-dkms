@@ -1,0 +1,281 @@
+diff -Naur ofa_kernel-1.5.3/drivers/infiniband/hw/nes/nes_nic.c ofa_kernel-1.5.3-35/drivers/infiniband/hw/nes/nes_nic.c
+--- ofa_kernel-1.5.3/drivers/infiniband/hw/nes/nes_nic.c	2011-01-17 08:26:09.000000000 +0100
++++ ofa_kernel-1.5.3-35/drivers/infiniband/hw/nes/nes_nic.c	2011-01-17 08:24:06.000000000 +0100
+@@ -841,6 +841,19 @@
+ 	return 0;
+ }
+ 
++static void set_allmulti(struct nes_device *nesdev, u32 nic_active_bit)
++{
++	u32 nic_active;
++
++	nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL);
++	nic_active |= nic_active_bit;
++	nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL, nic_active);
++	nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL);
++	nic_active &= ~nic_active_bit;
++	nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL, nic_active);
++}
++
++#define get_addr(addrs, index) ((addrs) + (index) * ETH_ALEN)
+ 
+ /**
+  * nes_netdev_set_multicast_list
+@@ -850,7 +863,6 @@
+ 	struct nes_vnic *nesvnic = netdev_priv(netdev);
+ 	struct nes_device *nesdev = nesvnic->nesdev;
+ 	struct nes_adapter *nesadapter = nesvnic->nesdev->nesadapter;
+-	struct dev_mc_list *multicast_addr;
+ 	u32 nic_active_bit;
+ 	u32 nic_active;
+ 	u32 perfect_filter_register_address;
+@@ -860,60 +872,78 @@
+ 	u8 mc_index;
+ 	int mc_nic_index = -1;
+ 	u8 pft_entries_preallocated = max(nesadapter->adapter_fcn_count *
+-					nics_per_function, 4);
++						nics_per_function, 4);
+ 	u8 max_pft_entries_avaiable = NES_PFT_SIZE - pft_entries_preallocated;
+ 	unsigned long flags;
++	int mc_count = netdev_mc_count(netdev);
+ 
+ 	spin_lock_irqsave(&nesadapter->resource_lock, flags);
+ 	nic_active_bit = 1 << nesvnic->nic_index;
+ 
+ 	if (netdev->flags & IFF_PROMISC) {
+-		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL);
++		nic_active = nes_read_indexed(nesdev,
++						NES_IDX_NIC_MULTICAST_ALL);
+ 		nic_active |= nic_active_bit;
+-		nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL, nic_active);
++		nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL,
++								nic_active);
+ 		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL);
+ 		nic_active |= nic_active_bit;
+ 		nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL, nic_active);
+ 		mc_all_on = 1;
+ 	} else if ((netdev->flags & IFF_ALLMULTI) ||
+-			   (nesvnic->nic_index > 3)) {
+-		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL);
+-		nic_active |= nic_active_bit;
+-		nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL, nic_active);
+-		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL);
+-		nic_active &= ~nic_active_bit;
+-		nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL, nic_active);
++		(nesvnic->nic_index > 3)) {
++		set_allmulti(nesdev, nic_active_bit);
+ 		mc_all_on = 1;
+ 	} else {
+-		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL);
++		nic_active = nes_read_indexed(nesdev,
++						NES_IDX_NIC_MULTICAST_ALL);
+ 		nic_active &= ~nic_active_bit;
+-		nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL, nic_active);
+-		nic_active = nes_read_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL);
++		nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL,
++								nic_active);
++		nic_active = nes_read_indexed(nesdev,
++						NES_IDX_NIC_UNICAST_ALL);
+ 		nic_active &= ~nic_active_bit;
+-		nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL, nic_active);
++		nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL,
++								nic_active);
+ 	}
+-
+-	nes_debug(NES_DBG_NIC_RX, "Number of MC entries = %d, Promiscous = %d, All Multicast = %d.\n",
+-		  netdev->mc_count, !!(netdev->flags & IFF_PROMISC),
+-		  !!(netdev->flags & IFF_ALLMULTI));
++	nes_debug(NES_DBG_NIC_RX, "Number of MC entries = %d,\
++				 Promiscous = %d, All Multicast = %d .\n",
++				mc_count, !!(netdev->flags & IFF_PROMISC),
++				!!(netdev->flags & IFF_ALLMULTI));
+ 	if (!mc_all_on) {
+-		multicast_addr = netdev->mc_list;
+-		perfect_filter_register_address = NES_IDX_PERFECT_FILTER_LOW +
++		char *addrs;
++		int i;
++		struct netdev_hw_addr *ha;
++
++		addrs = kmalloc(ETH_ALEN * mc_count, GFP_ATOMIC);
++		if (!addrs) {
++			set_allmulti(nesdev, nic_active_bit);
++			goto unlock;
++		}
++		i = 0;
++		netdev_for_each_mc_addr(ha, netdev) {
++			memcpy(get_addr(addrs, i), ha->addr, ETH_ALEN);
++			i++;
++		}
++		perfect_filter_register_address =
++						NES_IDX_PERFECT_FILTER_LOW +
+ 						pft_entries_preallocated * 0x8;
+-		for (mc_index = 0; mc_index < max_pft_entries_avaiable;
+-		mc_index++) {
+-			while (multicast_addr && nesvnic->mcrq_mcast_filter &&
+-			((mc_nic_index = nesvnic->mcrq_mcast_filter(nesvnic,
+-					multicast_addr->dmi_addr)) == 0)) {
+-				multicast_addr = multicast_addr->next;
+-			}
+-			if (mc_nic_index < 0)
+-				mc_nic_index = (1 << nesvnic->nic_index);
+-			while (nesadapter->pft_mcast_map[mc_index] < 16 &&
+-				nesadapter->pft_mcast_map[mc_index] !=
+-					nesvnic->nic_index &&
+-					mc_index < max_pft_entries_avaiable) {
+-						nes_debug(NES_DBG_NIC_RX,
++		for (i = 0, mc_index = 0;
++			mc_index < max_pft_entries_avaiable;
++			mc_index++) {
++			if (nesvnic->mcrq_mcast_filter)
++				mc_nic_index =
++					nesvnic->mcrq_mcast_filter(nesvnic,
++							get_addr(addrs, i));
++
++			if (mc_nic_index <= 0)
++				mc_nic_index = nesvnic->nic_index;
++
++			while ((nesadapter->pft_mcast_map[mc_index] < 16) &&
++				(nesadapter->pft_mcast_map[mc_index] !=
++							nesvnic->nic_index) &&
++				(mc_index < max_pft_entries_avaiable)) {
++				nes_debug(NES_DBG_NIC_RX,
+ 					"mc_index=%d skipping nic_index=%d,\
+ 					used for=%d \n", mc_index,
+ 					nesvnic->nic_index,
+@@ -922,47 +952,43 @@
+ 			}
+ 			if (mc_index >= max_pft_entries_avaiable)
+ 				break;
+-			if (multicast_addr) {
+-				macaddr_high  = ((u16)multicast_addr->dmi_addr[0]) << 8;
+-				macaddr_high += (u16)multicast_addr->dmi_addr[1];
+-				macaddr_low   = ((u32)multicast_addr->dmi_addr[2]) << 24;
+-				macaddr_low  += ((u32)multicast_addr->dmi_addr[3]) << 16;
+-				macaddr_low  += ((u32)multicast_addr->dmi_addr[4]) << 8;
+-				macaddr_low  += (u32)multicast_addr->dmi_addr[5];
++			if (i < mc_count) {
++				char *addr;
++
++				addr = get_addr(addrs, i);
++				i++;
++				macaddr_high  = ((u16) addr[0]) << 8;
++				macaddr_high += (u16) addr[1];
++				macaddr_low   = ((u32) addr[2]) << 24;
++				macaddr_low  += ((u32) addr[3]) << 16;
++				macaddr_low  += ((u32) addr[4]) << 8;
++				macaddr_low  += (u32) addr[5];
+ 				nes_write_indexed(nesdev,
+-						perfect_filter_register_address+(mc_index * 8),
+-						macaddr_low);
++					perfect_filter_register_address +
++								(mc_index * 8),
++								macaddr_low);
+ 				nes_write_indexed(nesdev,
+-						perfect_filter_register_address+4+(mc_index * 8),
+-						(u32)macaddr_high | NES_MAC_ADDR_VALID |
+-						((((u32)(mc_nic_index)) << 16)));
+-				multicast_addr = multicast_addr->next;
++					perfect_filter_register_address +
++							4 + (mc_index * 8),
++							(u32)macaddr_high |
++							NES_MAC_ADDR_VALID |
++					((((u32)(1<<mc_nic_index)) << 16)));
+ 				nesadapter->pft_mcast_map[mc_index] =
+ 							nesvnic->nic_index;
+ 			} else {
+-				nes_debug(NES_DBG_NIC_RX, "Clearing MC Address at register 0x%04X\n",
+-						  perfect_filter_register_address+(mc_index * 8));
+ 				nes_write_indexed(nesdev,
+-						perfect_filter_register_address+4+(mc_index * 8),
+-						0);
++					perfect_filter_register_address + 4
++							+ (mc_index * 8), 0);
+ 				nesadapter->pft_mcast_map[mc_index] = 255;
+ 			}
+ 		}
++
++		kfree(addrs);
+ 		/* PFT is not large enough */
+-		if (multicast_addr && multicast_addr->next) {
+-			nic_active = nes_read_indexed(nesdev,
+-						NES_IDX_NIC_MULTICAST_ALL);
+-			nic_active |= nic_active_bit;
+-			nes_write_indexed(nesdev, NES_IDX_NIC_MULTICAST_ALL,
+-								nic_active);
+-			nic_active = nes_read_indexed(nesdev,
+-						NES_IDX_NIC_UNICAST_ALL);
+-			nic_active &= ~nic_active_bit;
+-			nes_write_indexed(nesdev, NES_IDX_NIC_UNICAST_ALL,
+-								nic_active);
+-		}
++		if (i < mc_count)
++			set_allmulti(nesdev, nic_active_bit);
+ 	}
+-
++unlock:
+ 	spin_unlock_irqrestore(&nesadapter->resource_lock, flags);
+ }
+ 
+diff -Naur ofa_kernel-1.5.3/drivers/infiniband/hw/nes/nes_ud.c ofa_kernel-1.5.3-35/drivers/infiniband/hw/nes/nes_ud.c
+--- ofa_kernel-1.5.3/drivers/infiniband/hw/nes/nes_ud.c	2011-01-17 08:26:08.000000000 +0100
++++ ofa_kernel-1.5.3-35/drivers/infiniband/hw/nes/nes_ud.c	2011-01-17 08:24:00.000000000 +0100
+@@ -597,7 +597,7 @@
+ 
+ 	pRsc = locate_ud_adapter(nesvnic->nesdev->nesadapter);
+ 	if (pRsc == NULL)
+-		return 0;
++		return -1;
+ 
+ 	for (i = 0; i < NES_UD_MCAST_TBL_SZ; i++) {
+ 		if (pRsc->mcast[i].in_use &&
+@@ -614,6 +614,7 @@
+ 				dmi_addr[3], dmi_addr[4], dmi_addr[5], ret);
+ 		}
+ 	}
++
+ 	if (ret == 0)
+ 		return -1;
+ 	else
+@@ -1482,9 +1483,9 @@
+ 	unsigned addr = 0;
+ 	unsigned mqueue_ind_tbl;
+ 	struct nes_ud_resources *pRsc;
++	struct netdev_hw_addr *ha;
+ 
+ 	struct net_device *netdev = file->nesvnic->netdev;
+-	struct dev_mc_list *mc_list;
+ 	int	multicast_address_exist = 0;
+ 
+ 
+@@ -1495,23 +1496,16 @@
+ 	if (pRsc == NULL)
+ 		return -EFAULT;
+ 
+-	for (mc_list = netdev->mc_list;
+-		mc_list != NULL;
+-		mc_list = mc_list->next) {
+-		if (mc_list != NULL) {
+-			if ((mc_list->dmi_addr[3] == gid->raw[13]) &&
+-			    (mc_list->dmi_addr[4] == gid->raw[14]) &&
+-			    (mc_list->dmi_addr[5] == gid->raw[15]) &&
+-			    (mc_list->dmi_addr[0] == 0x01) &&
+-			    (mc_list->dmi_addr[1] == 0) &&
+-			    (mc_list->dmi_addr[2] == 0x5e)) {
+-				multicast_address_exist = 1;
+-				break;
+-			}
+-		} else {
++	netdev_for_each_mc_addr(ha, netdev)
++		if ((ha->addr[3] == gid->raw[13]) &&
++			(ha->addr[4] == gid->raw[14]) &&
++			(ha->addr[5] == gid->raw[15]) &&
++			(ha->addr[0] == 0x01) &&
++			(ha->addr[1] == 0) &&
++			(ha->addr[2] == 0x5e)) {
++			multicast_address_exist = 1;
+ 			break;
+ 		}
+-	}
+ 
+ 	if (multicast_address_exist == 0) {
+ 		nes_debug(NES_DBG_UD, "WARNING: multicast address not exist "

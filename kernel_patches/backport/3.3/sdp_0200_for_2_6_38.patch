@@ -1,0 +1,106 @@
+diff --git a/drivers/infiniband/ulp/sdp/sdp.h b/drivers/infiniband/ulp/sdp/sdp.h
+index c74aab7..6387e32 100644
+--- a/drivers/infiniband/ulp/sdp/sdp.h
++++ b/drivers/infiniband/ulp/sdp/sdp.h
+@@ -34,8 +34,8 @@
+ #define inet_sport(sk) inet_sk(sk)->inet_sport
+ #define inet_dport(sk) inet_sk(sk)->inet_dport
+ #define inet_saddr(sk) inet_sk(sk)->inet_saddr
+-#define inet_daddr(sk) inet_sk(sk)->inet_daddr
+-#define inet_rcv_saddr(sk) inet_sk(sk)->inet_rcv_saddr
++#define sdp_inet_daddr(sk) inet_sk(sk)->inet_daddr
++#define sdp_inet_rcv_saddr(sk) inet_sk(sk)->inet_rcv_saddr
+ 
+ #define sk_ssk(ssk) ((struct sock *)ssk)
+ 
+diff --git a/drivers/infiniband/ulp/sdp/sdp_cma.c b/drivers/infiniband/ulp/sdp/sdp_cma.c
+index 8e4d569..76a5e12 100644
+--- a/drivers/infiniband/ulp/sdp/sdp_cma.c
++++ b/drivers/infiniband/ulp/sdp/sdp_cma.c
+@@ -192,7 +192,7 @@ static int sdp_connect_handler(struct sock *sk, struct rdma_cm_id *id,
+ 
+ 		if ((h->ipv_cap & HH_IPV_MASK) == HH_IPV4) {
+ 			/* V6 mapped */
+-			inet_daddr(child) = dst_addr->sin_addr.s_addr;
++			sdp_inet_daddr(child) = dst_addr->sin_addr.s_addr;
+ 			ipv6_addr_set(&newnp->daddr, 0, 0, htonl(0x0000FFFF),
+ 					h->src_addr.ip4.addr);
+ 
+@@ -212,11 +212,11 @@ static int sdp_connect_handler(struct sock *sk, struct rdma_cm_id *id,
+ 			sdp_warn(child, "Bad IPV field: 0x%x\n", h->ipv_cap & HH_IPV_MASK);
+ 		}
+ 
+-		inet_daddr(child) =inet_saddr(child) = inet_rcv_saddr(child) = LOOPBACK4_IPV6;
++		sdp_inet_daddr(child) =inet_saddr(child) = sdp_inet_rcv_saddr(child) = LOOPBACK4_IPV6;
+ 	} else 
+ #endif
+ 	{
+-		inet_daddr(child) = dst_addr->sin_addr.s_addr;
++		sdp_inet_daddr(child) = dst_addr->sin_addr.s_addr;
+ 	}
+ 
+ #ifdef SDP_SOCK_HISTORY
+@@ -302,7 +302,7 @@ static int sdp_response_handler(struct sock *sk, struct rdma_cm_id *id,
+ 
+ 	dst_addr = (struct sockaddr_in *)&id->route.addr.dst_addr;
+ 	inet_dport(sk) = dst_addr->sin_port;
+-	inet_daddr(sk) = dst_addr->sin_addr.s_addr;
++	sdp_inet_daddr(sk) = dst_addr->sin_addr.s_addr;
+ 
+ #ifdef SDP_SOCK_HISTORY
+ 	sdp_ssk_hist_rename(sk);
+@@ -455,7 +455,7 @@ int sdp_cma_handler(struct rdma_cm_id *id, struct rdma_cm_event *event)
+ 			else 
+ #endif
+ 		{
+-			inet_saddr(sk) = inet_rcv_saddr(sk) =
++			inet_saddr(sk) = sdp_inet_rcv_saddr(sk) =
+ 				((struct sockaddr_in *)&id->route.addr.src_addr)->sin_addr.s_addr;
+ 		}
+ 		memset(&conn_param, 0, sizeof conn_param);
+@@ -522,7 +522,7 @@ int sdp_cma_handler(struct rdma_cm_id *id, struct rdma_cm_event *event)
+ 		rc = -ECONNREFUSED;
+ 		break;
+ 	case RDMA_CM_EVENT_ESTABLISHED:
+-		inet_saddr(sk) = inet_rcv_saddr(sk) =
++		inet_saddr(sk) = sdp_inet_rcv_saddr(sk) =
+ 			((struct sockaddr_in *)&id->route.addr.src_addr)->sin_addr.s_addr;
+ 		rc = sdp_connected_handler(sk);
+ 		break;
+diff --git a/drivers/infiniband/ulp/sdp/sdp_main.c b/drivers/infiniband/ulp/sdp/sdp_main.c
+index 026632e..cac16be 100644
+--- a/drivers/infiniband/ulp/sdp/sdp_main.c
++++ b/drivers/infiniband/ulp/sdp/sdp_main.c
+@@ -187,7 +187,7 @@ static int sdp_get_port(struct sock *sk, unsigned short snum)
+ 
+ 		addr4->sin_family = AF_INET;
+ 		addr4->sin_port = htons(snum);
+-		addr4->sin_addr.s_addr = inet_rcv_saddr(sk);
++		addr4->sin_addr.s_addr = sdp_inet_rcv_saddr(sk);
+ 
+ 		addr_len = sizeof(*addr4);
+ 
+@@ -2854,7 +2854,7 @@ void sdp_urg(struct sdp_sock *ssk, struct sk_buff *skb)
+ }
+ 
+ static struct percpu_counter *sockets_allocated;
+-static atomic_t memory_allocated;
++static atomic_long_t memory_allocated;
+ static struct percpu_counter *orphan_count;
+ static int memory_pressure;
+ struct proto sdp_proto = {
+diff --git a/drivers/infiniband/ulp/sdp/sdp_proc.c b/drivers/infiniband/ulp/sdp/sdp_proc.c
+index b57e218..0e30b81 100644
+--- a/drivers/infiniband/ulp/sdp/sdp_proc.c
++++ b/drivers/infiniband/ulp/sdp/sdp_proc.c
+@@ -150,8 +150,8 @@ static int sdp_v4_seq_show(struct seq_file *seq, int num, struct sock *sk)
+ 	__u16 srcp;
+ 	__u32 rx_queue, tx_queue;
+ 
+-	dest = inet_daddr(sk);
+-	src = inet_rcv_saddr(sk);
++	dest = sdp_inet_daddr(sk);
++	src = sdp_inet_rcv_saddr(sk);
+ 	destp = ntohs(inet_dport(sk));
+ 	srcp = ntohs(inet_sport(sk));
+ 	uid = sock_i_uid(sk);

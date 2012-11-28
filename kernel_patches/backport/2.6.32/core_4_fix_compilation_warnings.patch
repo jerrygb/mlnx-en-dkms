@@ -1,0 +1,29 @@
+From 2b8e00d6582e5c164b080023493d3b9393b67438 Mon Sep 17 00:00:00 2001
+From: Dotan Barak <dotanb@dev.mellanox.co.il>
+Date: Mon, 26 Sep 2011 12:13:06 +0300
+Subject: [PATCH] core: fix compilation warnings
+
+Fix the following compilation warning:
+drivers/infiniband/core/sysfs.c:528: warning: initialization discards qualifiers from pointer target type
+
+Signed-off-by: Dotan Barak <dotanb@dev.mellanox.co.il>
+---
+ drivers/infiniband/core/sysfs.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/infiniband/core/sysfs.c b/drivers/infiniband/core/sysfs.c
+index 7f27273..071048a 100644
+--- a/drivers/infiniband/core/sysfs.c
++++ b/drivers/infiniband/core/sysfs.c
+@@ -79,7 +79,7 @@ static ssize_t port_attr_show(struct kobject *kobj,
+ 	return port_attr->show(p, port_attr, buf);
+ }
+ 
+-static const struct sysfs_ops port_sysfs_ops = {
++static struct sysfs_ops port_sysfs_ops = {
+ 	.show = port_attr_show
+ };
+ 
+-- 
+1.7.6.1
+

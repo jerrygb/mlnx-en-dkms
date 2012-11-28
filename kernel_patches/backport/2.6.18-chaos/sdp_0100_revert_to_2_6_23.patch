@@ -1,0 +1,106 @@
+---
+ drivers/infiniband/ulp/sdp/sdp_main.c |   12 ++++--------
+ 1 file changed, 4 insertions(+), 8 deletions(-)
+
+Index: ofed_kernel.ipv6.clean/drivers/infiniband/ulp/sdp/sdp_main.c
+===================================================================
+--- ofed_kernel.ipv6.clean.orig/drivers/infiniband/ulp/sdp/sdp_main.c
++++ ofed_kernel.ipv6.clean/drivers/infiniband/ulp/sdp/sdp_main.c
+@@ -2951,7 +2951,7 @@ static inline struct ipv6_pinfo *inet6_s
+ }
+ #endif
+ 
+-static int sdp_create_ipvx_socket(struct net *net, struct socket *sock, int protocol,
++static int sdp_create_ipvx_socket(struct socket *sock, int protocol,
+ 	       	struct proto_ops *proto_ops)
+ {
+ 	struct sock *sk;
+@@ -2959,9 +2959,6 @@ static int sdp_create_ipvx_socket(struct
+ 
+ 	sdp_dbg(NULL, "type %d protocol %d\n", sock->type, protocol);
+ 
+-	if (net != &init_net)
+-		return -EAFNOSUPPORT;
+-
+ 	if (sock->type != SOCK_STREAM) {
+ 		sdp_warn(NULL, "SDP: unsupported type %d.\n", sock->type);
+ 		return -ESOCKTNOSUPPORT;
+@@ -2973,7 +2970,7 @@ static int sdp_create_ipvx_socket(struct
+ 		return -EPROTONOSUPPORT;
+ 	}
+ 
+-	sk = sk_alloc(net, PF_INET_SDP, GFP_KERNEL, &sdp_proto);
++	sk = sk_alloc(PF_INET_SDP, GFP_KERNEL, &sdp_proto, 1);
+ 	if (!sk) {
+ 		sdp_warn(NULL, "SDP: failed to allocate socket.\n");
+ 		return -ENOMEM;
+@@ -3008,15 +3005,15 @@ static int sdp_create_ipvx_socket(struct
+ }
+ 
+ #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+-static int sdp_create_v6_socket(struct net *net, struct socket *sock, int protocol)
++static int sdp_create_v6_socket(struct socket *sock, int protocol)
+ {
+-	return sdp_create_ipvx_socket(net, sock, protocol, &sdp_ipv6_proto_ops);
++	return sdp_create_ipvx_socket(sock, protocol, &sdp_ipv6_proto_ops);
+ }
+ #endif
+ 
+-static int sdp_create_v4_socket(struct net *net, struct socket *sock, int protocol)
++static int sdp_create_v4_socket(struct socket *sock, int protocol)
+ {
+-	return sdp_create_ipvx_socket(net, sock, protocol, &sdp_ipv4_proto_ops);
++	return sdp_create_ipvx_socket(sock, protocol, &sdp_ipv4_proto_ops);
+ }
+ 
+ static void sdp_add_device(struct ib_device *device)
+Index: ofed_kernel.ipv6.clean/drivers/infiniband/ulp/sdp/sdp_proc.c
+===================================================================
+--- ofed_kernel.ipv6.clean.orig/drivers/infiniband/ulp/sdp/sdp_proc.c
++++ ofed_kernel.ipv6.clean/drivers/infiniband/ulp/sdp/sdp_proc.c
+@@ -818,7 +818,7 @@ int __init sdp_proc_init(void)
+ 	}
+ #endif
+ 
+-	p = proc_net_fops_create(&init_net, sdp_seq_afinfo.name, S_IRUGO,
++	p = proc_net_fops_create(sdp_seq_afinfo.name, S_IRUGO,
+ 				 sdp_seq_afinfo.seq_fops);
+ 	if (p)
+ 		p->data = &sdp_seq_afinfo;
+@@ -827,7 +827,7 @@ int __init sdp_proc_init(void)
+ 
+ #ifdef SDPSTATS_ON
+ 
+-	stats = proc_net_fops_create(&init_net, PROC_SDP_STATS,
++	stats = proc_net_fops_create(PROC_SDP_STATS,
+ 			S_IRUGO | S_IWUGO, &sdpstats_fops);
+ 	if (!stats)
+ 		goto no_mem_stats;
+@@ -848,11 +848,11 @@ no_mem_prof:
+ #endif
+ 
+ #ifdef SDPSTATS_ON
+-	proc_net_remove(&init_net, PROC_SDP_STATS);
++	proc_net_remove(PROC_SDP_STATS);
+ 
+ no_mem_stats:
+ #endif
+-	proc_net_remove(&init_net, sdp_seq_afinfo.name);
++	proc_net_remove(sdp_seq_afinfo.name);
+ 
+ no_mem:
+ 	return -ENOMEM;
+@@ -860,11 +860,11 @@ no_mem:
+ 
+ void sdp_proc_unregister(void)
+ {
+-	proc_net_remove(&init_net, sdp_seq_afinfo.name);
++	proc_net_remove(sdp_seq_afinfo.name);
+ 	memset(sdp_seq_afinfo.seq_fops, 0, sizeof(*sdp_seq_afinfo.seq_fops));
+ 
+ #ifdef SDPSTATS_ON
+-	proc_net_remove(&init_net, PROC_SDP_STATS);
++	proc_net_remove(PROC_SDP_STATS);
+ #endif
+ #ifdef SDP_PROFILING
+ 	debugfs_remove(sdp_prof_file);

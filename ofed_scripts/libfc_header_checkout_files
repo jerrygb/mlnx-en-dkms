@@ -1,0 +1,6 @@
+include/scsi/fc/
+include/scsi/fc_encode.h
+include/scsi/fc_frame.h
+include/scsi/fc_transport_fcoe.h
+include/scsi/libfc.h
+include/scsi/libfcoe.h

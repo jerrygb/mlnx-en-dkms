@@ -1,0 +1,25 @@
+From 8a08993b43bef5f72bd95cd613959602fa78d589 Mon Sep 17 00:00:00 2001
+From: Eugenia Emantayev <eugenia@mellanox.co.il>
+Date: Sun, 13 May 2012 09:02:27 +0300
+Subject: [PATCH] mlx4_en/systune: remove unnecessary include
+
+Signed-off-by: Eugenia Emantayev <eugenia@mellanox.co.il>
+---
+ drivers/net/mlx4/sys_tune.c |    1 -
+ 1 files changed, 0 insertions(+), 1 deletions(-)
+
+diff --git a/drivers/net/mlx4/sys_tune.c b/drivers/net/mlx4/sys_tune.c
+index 29d1ab9..2795f10 100644
+--- a/drivers/net/mlx4/sys_tune.c
++++ b/drivers/net/mlx4/sys_tune.c
+@@ -37,7 +37,6 @@
+ #include <linux/cpumask.h>
+ #include <linux/percpu.h>
+ #include <linux/mutex.h>
+-#include <linux/sysdev.h>
+ #include <asm/atomic.h>
+ #include <linux/node.h>
+ #include "mlx4_en.h"
+-- 
+1.7.8.2
+

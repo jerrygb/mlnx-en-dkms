@@ -1,0 +1,137 @@
+Index: ofed_kernel/drivers/infiniband/ulp/sdp/sdp_main.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-04 09:32:44.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-04 10:06:49.706225000 +0200
+@@ -539,8 +539,8 @@
+ 	}
+ 
+ 	sdp_add_to_history(sk, __func__);
+-	percpu_counter_dec(sk->sk_prot->orphan_count);
+-	percpu_counter_dec(sk->sk_prot->sockets_allocated);
++	atomic_dec(sk->sk_prot->orphan_count);
++	atomic_dec(sk->sk_prot->sockets_allocated);
+ 	ssk->destructed_already = 1;
+ 
+ 	down_read(&device_removal_lock);
+@@ -2705,9 +2705,9 @@
+ 		sk->sk_data_ready(sk, 0);
+ }
+ 
+-static struct percpu_counter *sockets_allocated;
++static atomic_t sockets_allocated;
+ static atomic_t memory_allocated;
+-static struct percpu_counter *orphan_count;
++static atomic_t orphan_count;
+ static int memory_pressure;
+ struct proto sdp_proto = {
+         .close       = sdp_close,
+@@ -2725,8 +2725,10 @@
+         .get_port    = sdp_get_port,
+ 	/* Wish we had this: .listen   = sdp_listen */
+ 	.enter_memory_pressure = sdp_enter_memory_pressure,
++	.sockets_allocated = &sockets_allocated,
+ 	.memory_allocated = &memory_allocated,
+ 	.memory_pressure = &memory_pressure,
++	.orphan_count = &orphan_count,
+         .sysctl_mem             = sysctl_tcp_mem,
+         .sysctl_wmem            = sysctl_tcp_wmem,
+         .sysctl_rmem            = sysctl_tcp_rmem,
+@@ -2787,7 +2789,7 @@
+ 	}
+ 	sock_init_data(sock, sk);
+ 	sk->sk_protocol = 0x0 /* TODO: inherit tcp socket to use IPPROTO_TCP */;
+-	percpu_counter_inc(sk->sk_prot->sockets_allocated);
++	atomic_inc(sk->sk_prot->sockets_allocated);
+ 
+ 	memset((struct inet_sock *)sk + 1, 0,
+ 			sizeof(struct sdp_sock) - sizeof(struct inet_sock));
+@@ -2956,20 +2958,6 @@
+ 	spin_lock_init(&sock_list_lock);
+ 	spin_lock_init(&sdp_large_sockets_lock);
+ 
+-	sockets_allocated = kzalloc(sizeof(*sockets_allocated), GFP_KERNEL);
+-	if (!sockets_allocated)
+-		goto no_mem_sockets_allocated;
+-
+-	orphan_count = kzalloc(sizeof(*orphan_count), GFP_KERNEL);
+-	if (!orphan_count)
+-		goto no_mem_orphan_count;
+-
+-	percpu_counter_init(sockets_allocated, 0);
+-	percpu_counter_init(orphan_count, 0);
+-
+-	sdp_proto.sockets_allocated = sockets_allocated;
+-	sdp_proto.orphan_count = orphan_count;
+-
+ 	rx_comp_wq = create_workqueue("rx_comp_wq");
+ 	if (!rx_comp_wq)
+ 		goto no_mem_rx_wq;
+@@ -2992,8 +2980,6 @@
+ 
+ 	sdp_proc_init();
+ 
+-	atomic_set(&sdp_current_mem_usage, 0);
+-
+ 	ib_register_client(&sdp_client);
+ 
+ 	return 0;
+@@ -3005,10 +2991,6 @@
+ no_mem_sdp_wq:
+ 	destroy_workqueue(rx_comp_wq);
+ no_mem_rx_wq:
+-	kfree(orphan_count);
+-no_mem_orphan_count:
+-	kfree(sockets_allocated);
+-no_mem_sockets_allocated:
+ 	return rc;
+ }
+ 
+@@ -3017,9 +2999,9 @@
+ 	sock_unregister(PF_INET_SDP);
+ 	proto_unregister(&sdp_proto);
+ 
+-	if (percpu_counter_sum(orphan_count))
+-		printk(KERN_WARNING "%s: orphan_count %lld\n", __func__,
+-				percpu_counter_sum(orphan_count));
++	if (atomic_read(&orphan_count))
++		printk(KERN_WARNING "%s: orphan_count %d\n", __func__,
++				atomic_read(&orphan_count));
+ 
+ 	destroy_workqueue(rx_comp_wq);
+ 	destroy_workqueue(sdp_wq);
+@@ -3030,19 +3012,13 @@
+ 		printk(KERN_WARNING "%s: current mem usage %d\n", __func__,
+ 		       atomic_read(&sdp_current_mem_usage));
+ 
+-	if (percpu_counter_sum(sockets_allocated))
+-		printk(KERN_WARNING "%s: sockets_allocated %lld\n", __func__,
+-				percpu_counter_sum(sockets_allocated));
++	if (atomic_read(&sockets_allocated))
++		printk(KERN_WARNING "%s: sockets_allocated %d\n", __func__,
++				atomic_read(&sockets_allocated));
+ 
+ 	sdp_proc_unregister();
+ 
+ 	ib_unregister_client(&sdp_client);
+-
+-	percpu_counter_destroy(sockets_allocated);
+-	percpu_counter_destroy(orphan_count);
+-
+-	kfree(orphan_count);
+-	kfree(sockets_allocated);
+ }
+ 
+ module_init(sdp_init);
+Index: ofed_kernel/drivers/infiniband/ulp/sdp/sdp.h
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/sdp/sdp.h	2010-11-04 09:32:44.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/sdp/sdp.h	2010-11-04 10:06:27.622311000 +0200
+@@ -112,7 +112,7 @@
+ 		sdp_dbg(sk, "%s:%d - sock_put(SOCK_REF_ALIVE" \
+ 			") - refcount = %d from withing sk_common_release\n",\
+ 			__func__, __LINE__, atomic_read(&(sk)->sk_refcnt));\
+-		percpu_counter_inc((sk)->sk_prot->orphan_count);\
++		atomic_inc((sk)->sk_prot->orphan_count);\
+ 		sdp_add_to_history(sk, "sdp_common_release");	\
+ 		_sdp_add_to_history(sk, "SOCK_REF_ALIVE", __func__, __LINE__, \
+ 				2, SOCK_REF_ALIVE); \

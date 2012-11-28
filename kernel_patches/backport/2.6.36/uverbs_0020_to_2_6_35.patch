@@ -1,0 +1,68 @@
+commit 28812fe11a21826ba4c97c6c7971a619987cd912
+Author: Andi Kleen <andi@firstfloor.org>
+Date:   Tue Jan 5 12:48:07 2010 +0100
+
+    driver-core: Add attribute argument to class_attribute show/store
+    
+    Passing the attribute to the low level IO functions allows all kinds
+    of cleanups, by sharing low level IO code without requiring
+    an own function for every piece of data.
+    
+    Also drivers can extend the attributes with own data fields
+    and use that in the low level function.
+    
+    This makes the class attributes the same as sysdev_class attributes
+    and plain attributes.
+    
+    This will allow further cleanups in drivers.
+    
+    Full tree sweep converting all users.
+    
+    Signed-off-by: Andi Kleen <ak@linux.intel.com>
+    Signed-off-by: Greg Kroah-Hartman <gregkh@suse.de>
+
+diff --git a/drivers/infiniband/core/ucm.c b/drivers/infiniband/core/ucm.c
+index 1b09b73..02e209f 100644
+--- a/drivers/infiniband/core/ucm.c
++++ b/drivers/infiniband/core/ucm.c
+@@ -1336,7 +1336,9 @@ static void ib_ucm_remove_one(struct ib_device *device)
+ 	device_unregister(&ucm_dev->dev);
+ }
+ 
+-static ssize_t show_abi_version(struct class *class, char *buf)
++static ssize_t show_abi_version(struct class *class,
++				struct class_attribute *attr,
++				char *buf)
+ {
+ 	return sprintf(buf, "%d\n", IB_USER_CM_ABI_VERSION);
+ }
+diff --git a/drivers/infiniband/core/user_mad.c b/drivers/infiniband/core/user_mad.c
+index 02d360c..d0de8f2 100644
+--- a/drivers/infiniband/core/user_mad.c
++++ b/drivers/infiniband/core/user_mad.c
+@@ -965,7 +965,9 @@ static ssize_t show_port(struct device *dev, struct device_attribute *attr,
+ }
+ static DEVICE_ATTR(port, S_IRUGO, show_port, NULL);
+ 
+-static ssize_t show_abi_version(struct class *class, char *buf)
++static ssize_t show_abi_version(struct class *class,
++				struct class_attribute *attr,
++				char *buf)
+ {
+ 	return sprintf(buf, "%d\n", IB_USER_MAD_ABI_VERSION);
+ }
+diff --git a/drivers/infiniband/core/uverbs_main.c b/drivers/infiniband/core/uverbs_main.c
+index 4fa2e65..6087939 100644
+--- a/drivers/infiniband/core/uverbs_main.c
++++ b/drivers/infiniband/core/uverbs_main.c
+@@ -691,7 +691,9 @@ static ssize_t show_dev_abi_version(struct device *device,
+ }
+ static DEVICE_ATTR(abi_version, S_IRUGO, show_dev_abi_version, NULL);
+ 
+-static ssize_t show_abi_version(struct class *class, char *buf)
++static ssize_t show_abi_version(struct class *class,
++				struct class_attribute *attr,
++				char *buf)
+ {
+ 	return sprintf(buf, "%d\n", IB_USER_VERBS_ABI_VERSION);
+ }

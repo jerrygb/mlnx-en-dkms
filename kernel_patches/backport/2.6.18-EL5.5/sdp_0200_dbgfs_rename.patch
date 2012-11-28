@@ -1,0 +1,30 @@
+Index: ofed_kernel/drivers/infiniband/ulp/sdp/sdp_proc.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/sdp/sdp_proc.c	2010-11-04 09:45:59.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/sdp/sdp_proc.c	2010-11-04 09:58:56.411157000 +0200
+@@ -719,19 +719,19 @@
+ 
+ int sdp_ssk_hist_rename(struct sock *sk)
+ {
+-	char sk_name[256];
+ 	struct dentry *d;
++	int ret = 0;
+ 
+ 	if (!sk || !sdp_sk(sk)->hst_dentr)
+ 		return 0;
+ 
+-	sdp_ssk_hist_name(sk_name, sizeof(sk_name), sk);
++	d = sdp_sk(sk)->hst_dentr;
+ 
+-	d = debugfs_rename(sdp_dbgfs_base, sdp_sk(sk)->hst_dentr, sdp_dbgfs_base, sk_name);
+-	if (IS_ERR(d))
+-		return PTR_ERR(d);
++	ret = sdp_ssk_hist_open(sk);
++	if (!ret)
++		debugfs_remove(d);
+ 
+-	return 0;
++	return ret;
+ }
+ #endif
+ 

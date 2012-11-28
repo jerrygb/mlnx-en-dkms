@@ -1,0 +1,52 @@
+From 9a6a8332e963bb400120b95b406bf0b45a1b2fd0 Mon Sep 17 00:00:00 2001
+From: Alex Tabachnik <alext@mellanox.com>
+Date: Wed, 4 Jul 2012 09:14:49 +0300
+Subject: [PATCH V2] IB/iser: fix NULL pointer assignment in the disconnection flow
+
+	Prevent attempt to address to iser_conn structure when it is not initialized.
+	Prevent setting NULL to iser_conn structure when ib_conn state is ISER_CONN_UP (active)
+
+Signed-off-by: Alex Tabachnik <alext@mellanox.com>
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c |    3 ++-
+ drivers/infiniband/ulp/iser/iser_verbs.c |    9 ++++++---
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/infiniband/ulp/iser/iscsi_iser.c b/drivers/infiniband/ulp/iser/iscsi_iser.c
+index 0ab8c9c..1b7dd58 100644
+--- a/drivers/infiniband/ulp/iser/iscsi_iser.c
++++ b/drivers/infiniband/ulp/iser/iscsi_iser.c
+@@ -334,7 +334,8 @@ iscsi_iser_conn_destroy(struct iscsi_cls_conn *cls_conn)
+ 	 * we free it here.
+ 	 */
+ 	if (ib_conn) {
+-		ib_conn->iser_conn = NULL;
++		if (ib_conn->state != ISER_CONN_UP)
++			ib_conn->iser_conn = NULL;
+ 		iser_conn_put(ib_conn, 1); /* deref iscsi/ib conn unbinding */
+ 	}
+ }
+diff --git a/drivers/infiniband/ulp/iser/iser_verbs.c b/drivers/infiniband/ulp/iser/iser_verbs.c
+index c31facb..4b437a4 100644
+--- a/drivers/infiniband/ulp/iser/iser_verbs.c
++++ b/drivers/infiniband/ulp/iser/iser_verbs.c
+@@ -566,10 +566,13 @@ static int iser_disconnected_handler(struct rdma_cm_id *cma_id)
+ 	/* getting here when the state is UP means that the conn is being *
+ 	 * terminated asynchronously from the iSCSI layer's perspective.  */
+ 	if (iser_conn_state_comp_exch(ib_conn, ISER_CONN_UP,
+-				      ISER_CONN_TERMINATING))
+-		iscsi_conn_failure(ib_conn->iser_conn->iscsi_conn,
++				      ISER_CONN_TERMINATING)) {
++		if (ib_conn->iser_conn)
++			iscsi_conn_failure(ib_conn->iser_conn->iscsi_conn,
+ 				   ISCSI_ERR_CONN_FAILED);
+-
++		else
++			iser_err("error. NULL pointer for ib_conn->iser_conn received.\n");
++	}
+ 	/* Complete the termination process if no posts are pending */
+ 	if (ib_conn->post_recv_buf_count == 0 &&
+ 	    (atomic_read(&ib_conn->post_send_buf_count) == 0)) {
+-- 
+1.7.1
+

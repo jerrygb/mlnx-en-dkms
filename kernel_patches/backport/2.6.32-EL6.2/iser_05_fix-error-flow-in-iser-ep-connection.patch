@@ -1,0 +1,51 @@
+From 6804c521ccba327a9de202efb03c217bd111d184 Mon Sep 17 00:00:00 2001
+From: Or Gerlitz <ogerlitz@mellanox.com>
+Date: Sun, 29 Apr 2012 17:04:21 +0300
+Subject: [PATCH] IB/iser: Fix error flow in iser ep connection establishment
+
+The current error flow code was releasing the IB connection object and
+calling iscsi_destroy_endpoint() directly without going through the
+reference counting mechanism introduced in commit 39ff05d ("IB/iser:
+Enhance disconnection logic for multi-pathing"). This resulted in a
+double free of the iscsi endpoint object, which causes a kernel NULL
+pointer dereference.  Fix that by plugging into the IB conn reference
+counting correctly.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c |    5 ++---
+ drivers/infiniband/ulp/iser/iser_verbs.c |    3 ++-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iscsi_iser.c
++++ ofed_kernel/drivers/infiniband/ulp/iser/iscsi_iser.c
+@@ -571,10 +571,9 @@ iscsi_iser_ep_connect(struct Scsi_Host *
+ 
+ 	err = iser_connect(ib_conn, NULL, (struct sockaddr_in *)dst_addr,
+ 			   non_blocking);
+-	if (err) {
+-		iscsi_destroy_endpoint(ep);
++	if (err)
+ 		return ERR_PTR(err);
+-	}
++
+ 	return ep;
+ }
+ 
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iser_verbs.c
++++ ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+@@ -612,8 +612,9 @@ id_failure:
+ 	ib_conn->cma_id = NULL;
+ addr_failure:
+ 	ib_conn->state = ISER_CONN_DOWN;
++	iser_conn_put(ib_conn, 1); /* deref ib conn's cma id */
+ connect_failure:
+-	iser_conn_release(ib_conn, 1);
++	iser_conn_put(ib_conn, 1); /* deref ib conn deallocate */
+ 	return err;
+ }
+ 

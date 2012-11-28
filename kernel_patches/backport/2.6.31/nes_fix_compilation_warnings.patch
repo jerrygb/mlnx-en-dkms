@@ -1,0 +1,56 @@
+nes: fix compilation warnings
+
+Fix the following compilation warning:
+drivers/infiniband/hw/nes/nes_ud.c: In function 'nes_ud_create_nic':
+drivers/infiniband/hw/nes/nes_ud.c:744: warning: cast from pointer to integer of different size
+drivers/infiniband/hw/nes/nes_ud.c:745: warning: cast to pointer from integer of different size
+drivers/infiniband/hw/nes/nes_ud.c:769: warning: cast from pointer to integer of different size
+drivers/infiniband/hw/nes/nes_ud.c:771: warning: cast from pointer to integer of different size
+drivers/infiniband/hw/nes/nes_ud.c: In function 'nes_ud_destroy_nic':
+drivers/infiniband/hw/nes/nes_ud.c:862: warning: cast from pointer to integer of different size
+drivers/infiniband/hw/nes/nes_ud.c:864: warning: cast from pointer to integer of different size
+
+Signed-off-by: Dotan Barak <dotanb@dev.mellanox.co.il>
+
+---
+
+ drivers/infiniband/hw/nes/nes_ud.c |   10 +++++-----
+ 1 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/infiniband/hw/nes/nes_ud.c b/drivers/infiniband/hw/nes/nes_ud.c
+index a9ab971..9593b15 100644
+--- a/drivers/infiniband/hw/nes/nes_ud.c
++++ b/drivers/infiniband/hw/nes/nes_ud.c
+@@ -741,7 +741,7 @@ static int nes_ud_create_nic(struct nes_ud_file *file)
+ 
+ 	memset(file->nic_vbase, 0, file->nic_mem_size);
+ 
+-	vmem = (void *)(((unsigned long long)file->nic_vbase + (256 - 1)) &
++	vmem = (void *)(unsigned long)(((unsigned long long)(unsigned long)file->nic_vbase + (256 - 1)) &
+ 			~(unsigned long long)(256 - 1));
+ 	pmem = (dma_addr_t)(((unsigned long long)file->nic_pbase + (256 - 1)) &
+ 			~(unsigned long long)(256 - 1));
+@@ -766,9 +766,9 @@ static int nes_ud_create_nic(struct nes_ud_file *file)
+ 			cpu_to_le32(NES_CQP_CREATE_QP | NES_CQP_QP_TYPE_NIC);
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_ID_IDX] = cpu_to_le32(file->qpn);
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_CTX_LOW_IDX] =
+-			cpu_to_le32((u32)((u64)(&nesdev->cqp)));
++			cpu_to_le32((u32)((u64)(unsigned long)(&nesdev->cqp)));
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_CTX_HIGH_IDX] =
+-			cpu_to_le32((u32)(((u64)(&nesdev->cqp))>>32));
++			cpu_to_le32((u32)(((u64)((unsigned long)&nesdev->cqp))>>32));
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_SCRATCH_LOW_IDX] = 0;
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_SCRATCH_HIGH_IDX] = 0;
+ 
+@@ -859,9 +859,9 @@ static void nes_ud_destroy_nic(struct nes_ud_file *file)
+ 			cpu_to_le32(NES_CQP_DESTROY_QP | NES_CQP_QP_TYPE_NIC);
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_ID_IDX] = cpu_to_le32(file->qpn);
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_CTX_LOW_IDX] =
+-			cpu_to_le32((u32)((u64)(&nesdev->cqp)));
++			cpu_to_le32((u32)((u64)(unsigned long)(&nesdev->cqp)));
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_CTX_HIGH_IDX] =
+-			cpu_to_le32((u32)(((u64)(&nesdev->cqp)) >> 32));
++			cpu_to_le32((u32)(((u64)(unsigned long)(&nesdev->cqp)) >> 32));
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_SCRATCH_LOW_IDX] = 0;
+ 	cqp_wqe->wqe_words[NES_CQP_WQE_COMP_SCRATCH_HIGH_IDX] = 0;
+ 

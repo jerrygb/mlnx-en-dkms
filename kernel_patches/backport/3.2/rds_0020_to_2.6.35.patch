@@ -1,0 +1,52 @@
+Index: ofed_kernel-2.6.35/net/rds/af_rds.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/net/rds/af_rds.c	2010-11-07 17:47:56.385408880 +0200
++++ ofed_kernel-2.6.35/net/rds/af_rds.c	2010-11-07 17:49:34.844588530 +0200
+@@ -159,7 +159,7 @@
+ 	unsigned int mask = 0;
+ 	unsigned long flags;
+ 
+-	poll_wait(file, sk->sk_sleep, wait);
++	poll_wait(file, sk_sleep(sk), wait);
+ 
+ 	if (rs->rs_seen_congestion)
+ 		poll_wait(file, &rds_poll_waitq, wait);
+Index: ofed_kernel-2.6.35/net/rds/rds.h
+===================================================================
+--- ofed_kernel-2.6.35.orig/net/rds/rds.h	2010-11-07 17:47:56.697428522 +0200
++++ ofed_kernel-2.6.35/net/rds/rds.h	2010-11-07 17:49:24.756486240 +0200
+@@ -492,7 +492,7 @@
+ void rds_wake_sk_sleep(struct rds_sock *rs);
+ static inline void __rds_wake_sk_sleep(struct sock *sk)
+ {
+-	wait_queue_head_t *waitq = sk->sk_sleep;
++	wait_queue_head_t *waitq = sk_sleep(sk);
+ 
+ 	if (!sock_flag(sk, SOCK_DEAD) && waitq)
+ 		wake_up(waitq);
+Index: ofed_kernel-2.6.35/net/rds/recv.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/net/rds/recv.c	2010-11-07 17:52:33.848407505 +0200
++++ ofed_kernel-2.6.35/net/rds/recv.c	2010-11-07 17:54:04.648465518 +0200
+@@ -432,7 +432,7 @@
+ 				break;
+ 			}
+ 
+-			timeo = wait_event_interruptible_timeout(*sk->sk_sleep,
++			timeo = wait_event_interruptible_timeout(*sk_sleep(sk),
+ 						(!list_empty(&rs->rs_notify_queue)
+ 						|| rs->rs_cong_notify
+ 						|| rds_next_incoming(rs, &inc)),
+Index: ofed_kernel-2.6.35/net/rds/send.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/net/rds/send.c	2010-11-07 17:52:34.112404006 +0200
++++ ofed_kernel-2.6.35/net/rds/send.c	2010-11-07 17:54:21.093549854 +0200
+@@ -911,7 +911,7 @@
+ 			goto out;
+ 		}
+ 
+-		timeo = wait_event_interruptible_timeout(*sk->sk_sleep,
++		timeo = wait_event_interruptible_timeout(*sk_sleep(sk),
+ 					rds_send_queue_rm(rs, conn, rm,
+ 							  rs->rs_bound_port,
+ 							  dport,

@@ -1,0 +1,15 @@
+--- ofa_kernel-1.5.1.nochanges/drivers/scsi/libfc/fc_exch.c	2010-11-01 20:36:25.000000000 +0200
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/fc_exch.c	2010-11-03 00:45:04.000000000 +0200
+@@ -1421,8 +1421,11 @@
+ 	FC_EXCH_DBG(ep, "exch: BLS rctl %x - %s\n", fh->fh_r_ctl,
+ 		    fc_exch_rctl_name(fh->fh_r_ctl));
+ 
+-	if (cancel_delayed_work_sync(&ep->timeout_work))
++	if (cancel_delayed_work(&ep->timeout_work)) {
+ 		fc_exch_release(ep);	/* release from pending timer hold */
++		while (delayed_work_pending(&ep->timeout_work))
++			msleep(1);
++	}
+ 
+ 	spin_lock_bh(&ep->ex_lock);
+ 	switch (fh->fh_r_ctl) {

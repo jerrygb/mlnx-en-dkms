@@ -1,0 +1,31 @@
+diff --git a/drivers/net/mlx4/sys_tune.c b/drivers/net/mlx4/sys_tune.c
+index 29d1ab9..6ebc8f6 100644
+--- a/drivers/net/mlx4/sys_tune.c
++++ b/drivers/net/mlx4/sys_tune.c
+@@ -42,7 +42,7 @@
+ #include <linux/node.h>
+ #include "mlx4_en.h"
+ 
+-#ifdef CONFIG_X86
++#if 0
+ 
+ /* Each CPU is put into a group.  In most cases, the group number is
+  * equal to the CPU number of one of the CPUs in the group.  The
+@@ -269,7 +269,7 @@ static void sys_tune_ensure_init(void)
+ 
+ void sys_tune_fini(void)
+ {
+-#ifdef CONFIG_X86
++#if 0
+ 	void (*old)(void);
+ 	int cpu;
+ 
+@@ -299,7 +299,7 @@ void sys_tune_fini(void)
+ 
+ void sys_tune_init(void)
+ {
+-#ifdef CONFIG_X86
++#if 0
+ 	int cpu;
+ 
+ 	for_each_possible_cpu(cpu) {

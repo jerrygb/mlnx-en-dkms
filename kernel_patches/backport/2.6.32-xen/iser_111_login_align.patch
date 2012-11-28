@@ -1,0 +1,51 @@
+ib/iser: support iSCSI PDU padding
+
+RFC3270 mandates that iSCSI PDUs are padded to the closest integer
+number of four byte words, enhance the iser code to support that
+on both the TX/RX flows.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c     |   10 +++++++---
+ drivers/infiniband/ulp/iser/iser_initiator.c |    2 +-
+ 2 files changed, 8 insertions(+), 4 deletions(-)
+
+Index: ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iser_initiator.c
+===================================================================
+--- ofa_kernel-1.5.3-xens.orig/drivers/infiniband/ulp/iser/iser_initiator.c	2011-08-03 10:28:28.000000000 -0400
++++ ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iser_initiator.c	2011-08-04 08:46:01.000000000 -0400
+@@ -412,7 +412,7 @@ int iser_send_control(struct iscsi_conn 
+ 		memcpy(iser_conn->ib_conn->login_buf, task->data,
+ 							task->data_count);
+ 		tx_dsg->addr    = iser_conn->ib_conn->login_dma;
+-		tx_dsg->length  = data_seg_len;
++		tx_dsg->length  = task->data_count;
+ 		tx_dsg->lkey    = device->mr->lkey;
+ 		mdesc->num_sge = 2;
+ 	}
+Index: ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iscsi_iser.c
+===================================================================
+--- ofa_kernel-1.5.3-xens.orig/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-03 10:28:28.000000000 -0400
++++ ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-04 08:45:59.000000000 -0400
+@@ -100,13 +100,17 @@ iscsi_iser_recv(struct iscsi_conn *conn,
+ 
+ 	/* verify PDU length */
+ 	datalen = ntoh24(hdr->dlength);
+-	if (datalen != rx_data_len) {
+-		printk(KERN_ERR "iscsi_iser: datalen %d (hdr) != %d (IB) \n",
+-		       datalen, rx_data_len);
++	if (datalen > rx_data_len || (datalen + 4) < rx_data_len) {
++		iser_err("wrong datalen %d (hdr), %d (IB)\n",
++			datalen, rx_data_len);
+ 		rc = ISCSI_ERR_DATALEN;
+ 		goto error;
+ 	}
+ 
++	if (datalen != rx_data_len)
++		iser_dbg("aligned datalen (%d) hdr, %d (IB)\n",
++			datalen, rx_data_len);
++
+ 	/* read AHS */
+ 	ahslen = hdr->hlength * 4;
+ 

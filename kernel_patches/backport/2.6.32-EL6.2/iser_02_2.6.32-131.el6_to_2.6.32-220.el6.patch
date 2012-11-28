@@ -1,0 +1,155 @@
+This patch has the iser code diff between RHEL 6 as of kernel 2.6.32-131.0.15.el6
+to the one provided by RHEL 6.2 GA kernel of 2.6.32-220.el6, such that
+iser is aligned with the distro provided iscsi stack.
+
+It turns out that between RHEL 6.2 beta kernel of 2.6.32-202.el6 to the GA
+kernel 2.6.32-220.el6 some iscsi transport providers, among them iser, were
+patched such that the "lockless" bit advertized by the in the SCSI host
+template was REMOVED. As a result, when iser from mellanox ofed was
+running against the -220 kernel, we got a hang.
+
+This means that iser wise, the same backport directory can't be used for
+both the -202/beta and -220/GA kernels.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.c |  102 +++++++++++++++++++++++--------
+ 1 file changed, 78 insertions(+), 24 deletions(-)
+
+Index: mlnx-ofa_kernel-1.5.3/drivers/infiniband/ulp/iser/iscsi_iser.c
+===================================================================
+--- mlnx-ofa_kernel-1.5.3.orig/drivers/infiniband/ulp/iser/iscsi_iser.c
++++ mlnx-ofa_kernel-1.5.3/drivers/infiniband/ulp/iser/iscsi_iser.c
+@@ -531,6 +531,29 @@ iscsi_iser_conn_get_stats(struct iscsi_c
+ 	stats->custom[3].value = conn->fmr_unalign_cnt;
+ }
+
++static int iscsi_iser_get_ep_param(struct iscsi_endpoint *ep,
++				   enum iscsi_param param, char *buf)
++{
++	struct iser_conn *ib_conn = ep->dd_data;
++	int len;
++
++	switch (param) {
++	case ISCSI_PARAM_CONN_PORT:
++	case ISCSI_PARAM_CONN_ADDRESS:
++		if (!ib_conn || !ib_conn->cma_id)
++			return -ENOTCONN;
++
++		return iscsi_conn_get_addr_param((struct sockaddr_storage *)
++					&ib_conn->cma_id->route.addr.dst_addr,
++					param, buf);
++		break;
++	default:
++		return -ENOSYS;
++	}
++
++	return len;
++}
++
+ static struct iscsi_endpoint *
+ iscsi_iser_ep_connect(struct Scsi_Host *shost, struct sockaddr *dst_addr,
+ 		      int non_blocking)
+@@ -604,6 +627,59 @@ iscsi_iser_ep_disconnect(struct iscsi_en
+ 	iser_conn_terminate(ib_conn);
+ }
+
++static mode_t iser_attr_is_visible(int param_type, int param)
++{
++	switch (param_type) {
++	case ISCSI_HOST_PARAM:
++		switch (param) {
++		case ISCSI_HOST_PARAM_NETDEV_NAME:
++		case ISCSI_HOST_PARAM_HWADDRESS:
++		case ISCSI_HOST_PARAM_INITIATOR_NAME:
++			return S_IRUGO;
++		default:
++			return 0;
++		}
++	case ISCSI_PARAM:
++		switch (param) {
++		case ISCSI_PARAM_MAX_RECV_DLENGTH:
++		case ISCSI_PARAM_MAX_XMIT_DLENGTH:
++		case ISCSI_PARAM_HDRDGST_EN:
++		case ISCSI_PARAM_DATADGST_EN:
++		case ISCSI_PARAM_CONN_ADDRESS:
++		case ISCSI_PARAM_CONN_PORT:
++		case ISCSI_PARAM_EXP_STATSN:
++		case ISCSI_PARAM_PERSISTENT_ADDRESS:
++		case ISCSI_PARAM_PERSISTENT_PORT:
++		case ISCSI_PARAM_PING_TMO:
++		case ISCSI_PARAM_RECV_TMO:
++		case ISCSI_PARAM_INITIAL_R2T_EN:
++		case ISCSI_PARAM_MAX_R2T:
++		case ISCSI_PARAM_IMM_DATA_EN:
++		case ISCSI_PARAM_FIRST_BURST:
++		case ISCSI_PARAM_MAX_BURST:
++		case ISCSI_PARAM_PDU_INORDER_EN:
++		case ISCSI_PARAM_DATASEQ_INORDER_EN:
++		case ISCSI_PARAM_TARGET_NAME:
++		case ISCSI_PARAM_TPGT:
++		case ISCSI_PARAM_USERNAME:
++		case ISCSI_PARAM_PASSWORD:
++		case ISCSI_PARAM_USERNAME_IN:
++		case ISCSI_PARAM_PASSWORD_IN:
++		case ISCSI_PARAM_FAST_ABORT:
++		case ISCSI_PARAM_ABORT_TMO:
++		case ISCSI_PARAM_LU_RESET_TMO:
++		case ISCSI_PARAM_TGT_RESET_TMO:
++		case ISCSI_PARAM_IFACE_NAME:
++		case ISCSI_PARAM_INITIATOR_NAME:
++			return S_IRUGO;
++		default:
++			return 0;
++		}
++	}
++
++	return 0;
++}
++
+ static struct scsi_host_template iscsi_iser_sht = {
+ 	.module                 = THIS_MODULE,
+ 	.name                   = "iSCSI Initiator over iSER, v." DRV_VER,
+@@ -625,30 +701,6 @@ static struct iscsi_transport iscsi_iser
+ 	.owner                  = THIS_MODULE,
+ 	.name                   = "iser",
+ 	.caps                   = CAP_RECOVERY_L0 | CAP_MULTI_R2T,
+-	.param_mask		= ISCSI_MAX_RECV_DLENGTH |
+-				  ISCSI_MAX_XMIT_DLENGTH |
+-				  ISCSI_HDRDGST_EN |
+-				  ISCSI_DATADGST_EN |
+-				  ISCSI_INITIAL_R2T_EN |
+-				  ISCSI_MAX_R2T |
+-				  ISCSI_IMM_DATA_EN |
+-				  ISCSI_FIRST_BURST |
+-				  ISCSI_MAX_BURST |
+-				  ISCSI_PDU_INORDER_EN |
+-				  ISCSI_DATASEQ_INORDER_EN |
+-				  ISCSI_EXP_STATSN |
+-				  ISCSI_PERSISTENT_PORT |
+-				  ISCSI_PERSISTENT_ADDRESS |
+-				  ISCSI_TARGET_NAME | ISCSI_TPGT |
+-				  ISCSI_USERNAME | ISCSI_PASSWORD |
+-				  ISCSI_USERNAME_IN | ISCSI_PASSWORD_IN |
+-				  ISCSI_FAST_ABORT | ISCSI_ABORT_TMO |
+-				  ISCSI_LU_RESET_TMO | ISCSI_TGT_RESET_TMO |
+-				  ISCSI_PING_TMO | ISCSI_RECV_TMO |
+-				  ISCSI_IFACE_NAME | ISCSI_INITIATOR_NAME,
+-	.host_param_mask	= ISCSI_HOST_HWADDRESS |
+-				  ISCSI_HOST_NETDEV_NAME |
+-				  ISCSI_HOST_INITIATOR_NAME,
+ 	/* session management */
+ 	.create_session         = iscsi_iser_session_create,
+ 	.destroy_session        = iscsi_iser_session_destroy,
+@@ -656,8 +708,10 @@ static struct iscsi_transport iscsi_iser
+ 	.create_conn            = iscsi_iser_conn_create,
+ 	.bind_conn              = iscsi_iser_conn_bind,
+ 	.destroy_conn           = iscsi_iser_conn_destroy,
++	.attr_is_visible	= iser_attr_is_visible,
+ 	.set_param              = iscsi_iser_set_param,
+ 	.get_conn_param		= iscsi_conn_get_param,
++	.get_ep_param		= iscsi_iser_get_ep_param,
+ 	.get_session_param	= iscsi_session_get_param,
+ 	.start_conn             = iscsi_iser_conn_start,
+ 	.stop_conn              = iscsi_iser_conn_stop,

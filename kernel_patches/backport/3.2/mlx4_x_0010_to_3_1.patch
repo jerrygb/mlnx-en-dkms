@@ -1,0 +1,92 @@
+From 746f46e269bb203135f586ccfa280e6b4b9eca54 Mon Sep 17 00:00:00 2001
+From: Vladimir Sokolovsky <vlad@mellanox.co.il>
+Date: Mon, 2 Jan 2012 12:27:00 +0200
+Subject: [PATCH] mlx4: add 3.1 support
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.co.il>
+---
+ drivers/net/mlx4/en_netdev.c |   13 -------------
+ drivers/net/mlx4/en_rx.c     |   29 +++++++++++++----------------
+ 2 files changed, 13 insertions(+), 29 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 59d0fc3..85bd24f 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -48,18 +48,6 @@
+ #include "en_port.h"
+ 
+ 
+-static void mlx4_en_vlan_rx_register(struct net_device *dev, struct vlan_group *grp)
+-{
+-	struct mlx4_en_priv *priv = netdev_priv(dev);
+-
+-	en_dbg(HW, priv, "Registering VLAN group:%p\n", grp);
+-
+-	spin_lock_bh(&priv->vlan_lock);
+-	priv->vlgrp = grp;
+-	priv->vlgrp_modified = true;
+-	spin_unlock_bh(&priv->vlan_lock);
+-}
+-
+ static void mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+@@ -1286,7 +1274,6 @@ static const struct net_device_ops mlx4_netdev_ops = {
+ 	.ndo_validate_addr	= eth_validate_addr,
+ 	.ndo_change_mtu		= mlx4_en_change_mtu,
+ 	.ndo_tx_timeout		= mlx4_en_tx_timeout,
+-	.ndo_vlan_rx_register	= mlx4_en_vlan_rx_register,
+ 	.ndo_vlan_rx_add_vid	= mlx4_en_vlan_rx_add_vid,
+ 	.ndo_vlan_rx_kill_vid	= mlx4_en_vlan_rx_kill_vid,
+ #ifdef CONFIG_NET_POLL_CONTROLLER
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index 3d475cc..ebbe451 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -627,11 +627,14 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 					if (dev->features & NETIF_F_RXHASH)
+ 						gro_skb->rxhash = be32_to_cpu(cqe->immed_rss_invalid);
+ 
+-					if (priv->vlgrp && (cqe->vlan_my_qpn &
+-							    cpu_to_be32(MLX4_CQE_VLAN_PRESENT_MASK)))
+-						vlan_gro_frags(&cq->napi, priv->vlgrp, be16_to_cpu(cqe->sl_vid));
+-					else
+-						napi_gro_frags(&cq->napi);
++					if (cqe->vlan_my_qpn &
++					    cpu_to_be32(MLX4_CQE_VLAN_PRESENT_MASK)) {
++						u16 vid = be16_to_cpu(cqe->sl_vid);
++					
++						__vlan_hwaccel_put_tag(gro_skb, vid);
++					}
++
++					napi_gro_frags(&cq->napi);
+ 
+ 					goto next;
+ 				}
+@@ -665,17 +668,11 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 		if (dev->features & NETIF_F_RXHASH)
+ 			skb->rxhash = be32_to_cpu(cqe->immed_rss_invalid);
+ 
+-		/*
+-		 * Push it up the stack
+-		 * We have to check vlgrp since it is possible that vlans
+-		 * are not defined yet
+-		 */
+-		if (priv->vlgrp && (be32_to_cpu(cqe->vlan_my_qpn) &
+-				    MLX4_CQE_VLAN_PRESENT_MASK))
+-			vlan_hwaccel_receive_skb(skb, priv->vlgrp,
+-						 be16_to_cpu(cqe->sl_vid));
+-		else
+-			netif_receive_skb(skb);
++		if (be32_to_cpu(cqe->vlan_my_qpn) &
++		    MLX4_CQE_VLAN_PRESENT_MASK)
++			__vlan_hwaccel_put_tag(skb, be16_to_cpu(cqe->sl_vid));
++
++		netif_receive_skb(skb);
+ 
+ next:
+ 		++cons_index;
+-- 
+1.5.4.3
+

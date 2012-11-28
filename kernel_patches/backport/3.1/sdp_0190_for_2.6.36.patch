@@ -1,0 +1,136 @@
+Index: ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check.orig/drivers/infiniband/ulp/sdp/sdp_main.c	2011-01-09 14:32:46.000000000 +0200
++++ ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_main.c	2011-01-09 14:44:43.000000000 +0200
+@@ -897,7 +897,7 @@
+ 		return rc;
+ 	}
+ 
+-	sdp_dbg(sk, "%s " NIPQUAD_FMT ":%hu -> " NIPQUAD_FMT ":%hu\n", __func__,
++ 	sdp_dbg(sk, "%s " NIPQUAD_FMT ":%hu -> " NIPQUAD_FMT ":%hu\n", __func__,
+ 		NIPQUAD(src_addr.sin_addr.s_addr),
+ 		ntohs(src_addr.sin_port),
+ 		NIPQUAD(((struct sockaddr_in *)uaddr)->sin_addr.s_addr),
+@@ -1332,7 +1332,7 @@
+ 
+ static void sdp_mark_push(struct sdp_sock *ssk, struct sk_buff *skb)
+ {
+-	SDP_SKB_CB(skb)->flags |= TCPCB_FLAG_PSH;
++	SDP_SKB_CB(skb)->flags |= TCPHDR_PSH;
+ 	sdp_do_posts(ssk);
+ }
+ 
+@@ -1608,7 +1608,7 @@
+ {
+ 	if (unlikely(flags & MSG_OOB)) {
+ 		struct sk_buff *skb = sk->sk_write_queue.prev;
+-		SDP_SKB_CB(skb)->flags |= TCPCB_FLAG_URG;
++		SDP_SKB_CB(skb)->flags |= TCPHDR_URG;
+ 	}
+ }
+ 
+@@ -2215,7 +2215,7 @@
+ 			}
+ 
+ 			if (!copied)
+-				SDP_SKB_CB(skb)->flags &= ~TCPCB_FLAG_PSH;
++				SDP_SKB_CB(skb)->flags &= ~TCPHDR_PSH;
+ 
+ 			ssk->write_seq += copy;
+ 			SDP_SKB_CB(skb)->end_seq += copy;
+@@ -2976,13 +2976,15 @@
+ }
+ 
+ #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+-static int sdp_create_v6_socket(struct net *net, struct socket *sock, int protocol)
++static int sdp_create_v6_socket(struct net *net, struct socket *sock, int protocol,
++			int kern)
+ {
+ 	return sdp_create_ipvx_socket(net, sock, protocol, &sdp_ipv6_proto_ops);
+ }
+ #endif
+ 
+-static int sdp_create_v4_socket(struct net *net, struct socket *sock, int protocol)
++static int sdp_create_v4_socket(struct net *net, struct socket *sock, int protocol,
++			int kern)
+ {
+ 	return sdp_create_ipvx_socket(net, sock, protocol, &sdp_ipv4_proto_ops);
+ }
+Index: ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_bcopy.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check.orig/drivers/infiniband/ulp/sdp/sdp_bcopy.c	2011-01-09 14:32:46.000000000 +0200
++++ ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_bcopy.c	2011-01-09 14:43:44.000000000 +0200
+@@ -124,8 +124,8 @@
+ 		!ssk->nagle_last_unacked ||
+ 		skb->next != (struct sk_buff *)&sk_ssk(ssk)->sk_write_queue ||
+ 		skb->len + sizeof(struct sdp_bsdh) >= ssk->xmit_size_goal ||
+-		(SDP_SKB_CB(skb)->flags & TCPCB_FLAG_PSH) ||
+-		(SDP_SKB_CB(skb)->flags & TCPCB_FLAG_URG);
++		(SDP_SKB_CB(skb)->flags & TCPHDR_PSH) ||
++		(SDP_SKB_CB(skb)->flags & TCPHDR_URG);
+ 
+ 	if (send_now) {
+ 		unsigned long mseq = ring_head(ssk->tx_ring);
+Index: ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_tx.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check.orig/drivers/infiniband/ulp/sdp/sdp_tx.c	2011-01-09 14:32:46.000000000 +0200
++++ ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp_tx.c	2011-01-09 14:43:44.000000000 +0200
+@@ -99,7 +99,7 @@
+ 		TX_SRCAVAIL_STATE(skb)->mseq = mseq;
+ 	}
+ 
+-	if (unlikely(SDP_SKB_CB(skb)->flags & TCPCB_FLAG_URG))
++	if (unlikely(SDP_SKB_CB(skb)->flags & TCPHDR_URG))
+ 		h->flags = SDP_OOB_PRES | SDP_OOB_PEND;
+ 	else
+ 		h->flags = 0;
+@@ -159,7 +159,7 @@
+ 	tx_wr.num_sge = frags + 1;
+ 	tx_wr.opcode = IB_WR_SEND;
+ 	tx_wr.send_flags = send_flags;
+-	if (unlikely(SDP_SKB_CB(skb)->flags & TCPCB_FLAG_URG))
++	if (unlikely(SDP_SKB_CB(skb)->flags & TCPHDR_URG))
+ 		tx_wr.send_flags |= IB_SEND_SOLICITED;
+ 
+ 	rc = ib_post_send(ssk->qp, &tx_wr, &bad_wr);
+Index: ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp.h
+===================================================================
+--- ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check.orig/drivers/infiniband/ulp/sdp/sdp.h	2011-01-09 14:32:46.000000000 +0200
++++ ofa_1_5_dev_kernel-20110109-1430_linux-2.6.36_check/drivers/infiniband/ulp/sdp/sdp.h	2011-01-09 14:47:02.000000000 +0200
+@@ -13,32 +13,20 @@
+ #include "sdp_dbg.h"
+ 
+ #ifndef NIPQUAD
+-#define NIPQUAD(addr) \
+-        ((unsigned char *)&(addr))[0], \
+-        ((unsigned char *)&(addr))[1], \
+-        ((unsigned char *)&(addr))[2], \
+-        ((unsigned char *)&(addr))[3]
++#define NIPQUAD(addr) &(addr)
+ #endif
+ 
+ #ifndef NIPQUAD_FMT
+-#define NIPQUAD_FMT "%u.%u.%u.%u"
++#define NIPQUAD_FMT "%pI4"
+ #endif
+ 
+ #if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+ #ifndef NIP6
+-#define NIP6(addr) \
+-        ntohs((addr).s6_addr16[0]), \
+-        ntohs((addr).s6_addr16[1]), \
+-        ntohs((addr).s6_addr16[2]), \
+-        ntohs((addr).s6_addr16[3]), \
+-        ntohs((addr).s6_addr16[4]), \
+-        ntohs((addr).s6_addr16[5]), \
+-        ntohs((addr).s6_addr16[6]), \
+-        ntohs((addr).s6_addr16[7])
++#define NIP6(addr) &(addr)
+ #endif
+ 
+ #ifndef NIP6_FMT
+-#define NIP6_FMT "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x"
++#define NIP6_FMT "%pI6"
+ #endif
+ #endif
+ 

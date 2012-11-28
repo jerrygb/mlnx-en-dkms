@@ -1,0 +1,37 @@
+Index: ofed_kernel-2.6.35/drivers/net/mlx4/mr.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/net/mlx4/mr.c	2010-11-07 17:35:54.649434129 +0200
++++ ofed_kernel-2.6.35/drivers/net/mlx4/mr.c	2010-11-07 17:40:43.932472076 +0200
+@@ -441,10 +441,14 @@
+ 	if (!mtts)
+ 		return -ENOMEM;
+ 
++	dma_sync_single_for_cpu(&dev->pdev->dev, dma_handle,
++				npages * sizeof (u64), DMA_TO_DEVICE);
++
+ 	for (i = 0; i < npages; ++i)
+ 		mtts[i] = cpu_to_be64(page_list[i] | MLX4_MTT_FLAG_PRESENT);
+ 
+-	dma_sync_single(&dev->pdev->dev, dma_handle, npages * sizeof (u64), DMA_TO_DEVICE);
++	dma_sync_single_for_device(&dev->pdev->dev, dma_handle,
++				   npages * sizeof (u64), DMA_TO_DEVICE);
+ 
+ 	return 0;
+ }
+@@ -593,11 +597,14 @@
+ 	/* Make sure MPT status is visible before writing MTT entries */
+ 	wmb();
+ 
++	dma_sync_single_for_cpu(&dev->pdev->dev, fmr->dma_handle,
++				npages * sizeof(u64), DMA_TO_DEVICE);
++
+ 	for (i = 0; i < npages; ++i)
+ 		fmr->mtts[i] = cpu_to_be64(page_list[i] | MLX4_MTT_FLAG_PRESENT);
+ 
+-	dma_sync_single(&dev->pdev->dev, fmr->dma_handle,
+-			npages * sizeof(u64), DMA_TO_DEVICE);
++	dma_sync_single_for_device(&dev->pdev->dev, fmr->dma_handle,
++				   npages * sizeof(u64), DMA_TO_DEVICE);
+ 
+ 	fmr->mpt->key    = cpu_to_be32(key);
+ 	fmr->mpt->lkey   = cpu_to_be32(key);

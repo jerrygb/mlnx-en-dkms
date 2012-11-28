@@ -1,0 +1,215 @@
+Index: ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_main.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-07 11:51:23.846000613 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-07 11:52:07.724428655 +0200
+@@ -873,7 +873,7 @@
+ 	 * having to remove and re-insert us on the wait queue.
+ 	 */
+ 	for (;;) {
+-		prepare_to_wait_exclusive(sk->sk_sleep, &wait,
++		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
+ 					  TASK_INTERRUPTIBLE);
+ 		release_sock(sk);
+ 		if (list_empty(&ssk->accept_queue)) {
+@@ -893,7 +893,7 @@
+ 		if (!timeo)
+ 			break;
+ 	}
+-	finish_wait(sk->sk_sleep, &wait);
++	finish_wait(sk_sleep(sk), &wait);
+ 	sdp_dbg(sk, "%s returns %d\n", __func__, err);
+ 	return err;
+ }
+@@ -1845,7 +1845,7 @@
+ 	while (1) {
+ 		set_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+ 
+-		prepare_to_wait(sk->sk_sleep, &wait, TASK_INTERRUPTIBLE);
++		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+ 
+ 		if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
+ 			goto do_error;
+@@ -1913,7 +1913,7 @@
+ 		*timeo_p = current_timeo;
+ 	}
+ out:
+-	finish_wait(sk->sk_sleep, &wait);
++	finish_wait(sk_sleep(sk), &wait);
+ 	return err;
+ 
+ do_error:
+Index: ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_bcopy.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/ulp/sdp/sdp_bcopy.c	2010-11-07 11:53:51.985409157 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_bcopy.c	2010-11-07 11:54:04.012463937 +0200
+@@ -169,7 +169,7 @@
+ 	ssk->nagle_last_unacked = 0;
+ 	sdp_post_sends(ssk, GFP_ATOMIC);
+ 
+-	if (sk->sk_sleep && waitqueue_active(sk->sk_sleep))
++	if (sk_sleep(sk) && waitqueue_active(sk_sleep(sk)))
+ 		sk_stream_write_space(sk);
+ out:
+ 	bh_unlock_sock(sk);
+Index: ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_tx.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/ulp/sdp/sdp_tx.c	2010-11-07 11:55:54.729415378 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_tx.c	2010-11-07 11:56:17.266853040 +0200
+@@ -227,7 +227,7 @@
+ 					"probably was canceled already\n");
+ 		}
+ 
+-		wake_up(sk->sk_sleep);
++		wake_up(sk_sleep(sk));
+ 	} else {
+ 		/* Keepalive probe sent cleanup */
+ 		sdp_cnt(sdp_keepalive_probes_sent);
+@@ -292,14 +292,14 @@
+ 
+ 	if (sk->sk_write_pending) {
+ 		/* Do the TX posts from sender context */
+-		if (sk->sk_sleep && waitqueue_active(sk->sk_sleep)) {
++		if (sk_sleep(sk) && waitqueue_active(sk_sleep(sk))) {
+ 			sdp_prf1(sk, NULL, "Waking up pending sendmsg");
+-			wake_up_interruptible(sk->sk_sleep);
++			wake_up_interruptible(sk_sleep(sk));
+ 			return 0;
+ 		} else
+ 			sdp_prf1(sk, NULL, "Unexpected: sk_sleep=%p, "
+ 				"waitqueue_active: %d\n",
+-				sk->sk_sleep, waitqueue_active(sk->sk_sleep));
++				sk_sleep(sk), waitqueue_active(sk_sleep(sk)));
+ 	}
+ 
+ 	if (posts_handler(ssk)) {
+Index: ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_rx.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/ulp/sdp/sdp_rx.c	2010-11-07 11:57:33.457408121 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_rx.c	2010-11-07 17:22:25.380474105 +0200
+@@ -31,6 +31,7 @@
+  */
+ #include <linux/interrupt.h>
+ #include <linux/dma-mapping.h>
++#include <linux/rcupdate.h>
+ #include <rdma/ib_verbs.h>
+ #include <rdma/rdma_cm.h>
+ #include "sdp.h"
+@@ -338,7 +339,7 @@
+ 			sdp_dbg_data(sk_ssk(ssk), "got RX SrcAvail while waiting "
+ 					"for TX SrcAvail. waking up TX SrcAvail"
+ 					"to be aborted\n");
+-			wake_up(sk->sk_sleep);
++			wake_up(sk_sleep(sk));
+ 		}
+ 
+ 		atomic_add(skb->len, &ssk->rcv_nxt);
+@@ -597,7 +598,7 @@
+ 			ssk->sa_cancel_mseq = ntohl(h->mseq);
+ 			ssk->sa_cancel_arrived = 1;
+ 			if (ssk->rx_sa)
+-				wake_up(sk->sk_sleep);
++				wake_up(sk_sleep(sk));
+ 
+ 			skb_queue_tail(&ssk->rx_ctl_q, skb);
+ 		} else if (h->mid == SDP_MID_RDMARDCOMPL) {
+@@ -685,6 +686,7 @@
+ {
+ 	struct sock *sk = sk_ssk(ssk);
+ 	struct socket *sock = sk->sk_socket;
++	struct socket_wq *wq;
+ 
+ 	if (tx_credits(ssk) < ssk->min_bufs || !sock)
+ 		return;
+@@ -692,10 +694,13 @@
+ 	clear_bit(SOCK_NOSPACE, &sock->flags);
+ 	sdp_prf1(sk, NULL, "Waking up sleepers");
+ 
+-	if (sk->sk_sleep && waitqueue_active(sk->sk_sleep))
+-		wake_up_interruptible(sk->sk_sleep);
+-	if (sock->fasync_list && !(sk->sk_shutdown & SEND_SHUTDOWN))
++	rcu_read_lock();
++	wq = rcu_dereference(sk->sk_wq);
++	if (wq_has_sleeper(wq))
++		wake_up_interruptible(&wq->wait);
++	if (wq && wq->fasync_list && !(sk->sk_shutdown & SEND_SHUTDOWN))
+ 		sock_wake_async(sock, 2, POLL_OUT);
++	rcu_read_unlock();
+ }
+ 
+ int sdp_poll_rx_cq(struct sdp_sock *ssk)
+@@ -810,7 +815,7 @@
+ 
+ static inline int should_wake_up(struct sock *sk)
+ {
+-	return sk->sk_sleep && waitqueue_active(sk->sk_sleep) &&
++	return sk_sleep(sk) && waitqueue_active(sk_sleep(sk)) &&
+ 		(posts_handler(sdp_sk(sk)) || somebody_is_waiting(sk));
+ }
+ 
+@@ -829,7 +834,7 @@
+ 	sdp_prf(sk, NULL, "rx irq");
+ 
+ 	if (should_wake_up(sk)) {
+-		wake_up_interruptible(sk->sk_sleep);
++		wake_up_interruptible(sk_sleep(sk));
+ 		SDPSTATS_COUNTER_INC(rx_int_wake_up);
+ 	} else {
+ 		if (queue_work_on(ssk->cpu, rx_comp_wq, &ssk->rx_comp_work))
+Index: ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_zcopy.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/ulp/sdp/sdp_zcopy.c	2010-11-07 11:57:37.472406105 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/ulp/sdp/sdp_zcopy.c	2010-11-07 11:58:02.808761736 +0200
+@@ -156,7 +156,7 @@
+ 	sdp_dbg_data(sk, "sleep till RdmaRdCompl. timeo = %ld.\n", *timeo_p);
+ 	sdp_prf1(sk, NULL, "Going to sleep");
+ 	while (ssk->qp_active) {
+-		prepare_to_wait(sk->sk_sleep, &wait, TASK_INTERRUPTIBLE);
++		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+ 
+ 		if (unlikely(!*timeo_p)) {
+ 			err = -ETIME;
+@@ -213,7 +213,7 @@
+ 		*timeo_p = current_timeo;
+ 	}
+ 
+-	finish_wait(sk->sk_sleep, &wait);
++	finish_wait(sk_sleep(sk), &wait);
+ 
+ 	sdp_dbg_data(sk, "Finished waiting - RdmaRdCompl: %d/%d bytes, flags: 0x%x\n",
+ 			tx_sa->bytes_acked, tx_sa->bytes_sent, tx_sa->abort_flags);
+@@ -234,7 +234,7 @@
+ 
+ 	sdp_dbg_data(sk, "Sleep till RDMA wr finished.\n");
+ 	while (1) {
+-		prepare_to_wait(sk->sk_sleep, &wait, TASK_UNINTERRUPTIBLE);
++		prepare_to_wait(sk_sleep(sk), &wait, TASK_UNINTERRUPTIBLE);
+ 
+ 		if (!ssk->tx_ring.rdma_inflight->busy) {
+ 			sdp_dbg_data(sk, "got rdma cqe\n");
+@@ -266,7 +266,7 @@
+ 		posts_handler_get(ssk);
+ 	}
+ 
+-	finish_wait(sk->sk_sleep, &wait);
++	finish_wait(sk_sleep(sk), &wait);
+ 
+ 	sdp_dbg_data(sk, "Finished waiting\n");
+ 	return rc;
+@@ -358,7 +358,7 @@
+ 	sdp_dbg_data(sk, "Got SendSM - aborting SrcAvail\n");
+ 
+ 	ssk->tx_sa->abort_flags |= TX_SA_SENDSM;
+-	wake_up(sk->sk_sleep);
++	wake_up(sk_sleep(sk));
+ 	sdp_dbg_data(sk, "woke up sleepers\n");
+ 
+ out:
+@@ -390,7 +390,7 @@
+ 
+ 	ssk->tx_sa->bytes_acked += bytes_completed;
+ 
+-	wake_up(sk->sk_sleep);
++	wake_up(sk_sleep(sk));
+ 	sdp_dbg_data(sk, "woke up sleepers\n");
+ 
+ out:

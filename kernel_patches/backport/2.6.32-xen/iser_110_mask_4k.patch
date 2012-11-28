@@ -1,0 +1,57 @@
+ib/iser: fix wrong mask when sizeof (dma_addr_t) > sizeof (unsigned long)
+
+The code that prepares the SG associated with SCSI command for FMR was
+buggy for systems DMA addresses that don't fit in unsigned long, e.g
+sizeof(dma_addr_t) on the 32-bit based XenServer dom0 is eight.
+Fix that by casting to unsigned long long a masking constant used by
+the code. This resolves a crash in iser_sg_to_page_vec.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.h  |    2 +-
+ drivers/infiniband/ulp/iser/iser_memory.c |    8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+Index: ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iscsi_iser.h
+===================================================================
+--- ofa_kernel-1.5.3-xens.orig/drivers/infiniband/ulp/iser/iscsi_iser.h	2011-08-03 10:28:30.000000000 -0400
++++ ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iscsi_iser.h	2011-08-04 08:46:01.000000000 -0400
+@@ -88,7 +88,7 @@
+ 	} while (0)
+ 
+ #define SHIFT_4K	12
+-#define SIZE_4K	(1UL << SHIFT_4K)
++#define SIZE_4K	(1ULL << SHIFT_4K)
+ #define MASK_4K	(~(SIZE_4K-1))
+ 
+ 					/* support upto 512KB in one RDMA */
+Index: ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iser_memory.c
+===================================================================
+--- ofa_kernel-1.5.3-xens.orig/drivers/infiniband/ulp/iser/iser_memory.c	2011-08-03 10:28:30.000000000 -0400
++++ ofa_kernel-1.5.3-xens/drivers/infiniband/ulp/iser/iser_memory.c	2011-08-04 08:45:59.000000000 -0400
+@@ -270,9 +270,9 @@ static void iser_data_buf_dump(struct is
+ 		return;
+ 
+ 	for_each_sg(sgl, sg, data->dma_nents, i)
+-		iser_warn("sg[%d] dma_addr:0x%lX page:0x%p "
++		iser_warn("sg[%d] dma_addr:0x%llX page:0x%p "
+ 			 "off:0x%x sz:0x%x dma_len:0x%x\n",
+-			 i, (unsigned long)ib_sg_dma_address(ibdev, sg),
++			 i, (unsigned long long)ib_sg_dma_address(ibdev, sg),
+ 			 sg_page(sg), sg->offset,
+ 			 sg->length, ib_sg_dma_len(ibdev, sg));
+ }
+@@ -396,10 +396,10 @@ int iser_reg_rdma_mem(struct iscsi_iser_
+ 		regd_buf->reg.is_fmr = 0;
+ 
+ 		iser_dbg("PHYSICAL Mem.register: lkey: 0x%08X rkey: 0x%08X  "
+-			 "va: 0x%08lX sz: %ld]\n",
++			 "va: 0x%08llX sz: %ld]\n",
+ 			 (unsigned int)regd_buf->reg.lkey,
+ 			 (unsigned int)regd_buf->reg.rkey,
+-			 (unsigned long)regd_buf->reg.va,
++			 (unsigned long long)regd_buf->reg.va,
+ 			 (unsigned long)regd_buf->reg.len);
+ 	} else { /* use FMR for multiple dma entries */
+ 		iser_page_vec_build(mem, ib_conn->page_vec, ibdev);

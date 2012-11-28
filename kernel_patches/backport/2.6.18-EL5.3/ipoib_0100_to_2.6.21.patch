@@ -1,0 +1,476 @@
+Backport IPOIB to kernel 2.6.23
+
+Signed-off-by: Eli Cohen <eli@mellanox.co.il>
+
+---
+
+---
+ drivers/infiniband/ulp/ipoib/ipoib.h           |    6 +-
+ drivers/infiniband/ulp/ipoib/ipoib_cm.c        |   20 ++++-----
+ drivers/infiniband/ulp/ipoib/ipoib_ib.c        |   55 +++++++++++++------------
+ drivers/infiniband/ulp/ipoib/ipoib_main.c      |   34 +++++----------
+ drivers/infiniband/ulp/ipoib/ipoib_multicast.c |   10 ++--
+ 5 files changed, 61 insertions(+), 64 deletions(-)
+
+Index: ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib.h
+===================================================================
+--- ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check.orig/drivers/infiniband/ulp/ipoib/ipoib.h	2011-09-14 14:26:44.000000000 +0300
++++ ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib.h	2011-09-14 15:46:36.000000000 +0300
+@@ -329,8 +329,6 @@ struct ipoib_dev_priv {
+ 
+ 	struct net_device *dev;
+ 
+-	struct napi_struct napi;
+-
+ 	unsigned long flags;
+ 
+ 	struct mutex vlan_mutex;
+@@ -390,6 +388,8 @@ struct ipoib_dev_priv {
+ 
+ 	struct ib_event_handler event_handler;
+ 
++	struct net_device_stats stats;
++
+ 	struct net_device *parent;
+ 	struct list_head child_intfs;
+ 	struct list_head list;
+@@ -484,7 +484,7 @@ void ipoib_get_tcp_ring(struct net_devic
+ void ipoib_get_udp_rings(struct net_device *dev, u8 *poll_rings, u8 *num_rings);
+ void ipoib_accl_poll(struct net_device *dev, int ring_num);
+ 
+-int ipoib_poll(struct napi_struct *napi, int budget);
++int ipoib_poll(struct net_device *dev, int *budget);
+ void ipoib_ib_completion(struct ib_cq *cq, void *dev_ptr);
+ void ipoib_send_comp_handler(struct ib_cq *cq, void *dev_ptr);
+ 
+Index: ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check.orig/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2011-09-14 14:26:36.000000000 +0300
++++ ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2011-09-14 15:46:37.000000000 +0300
+@@ -593,7 +593,7 @@ void ipoib_cm_handle_rx_wc(struct net_de
+ 		ipoib_dbg(priv, "cm recv error "
+ 			   "(status=%d, wrid=%d vend_err %x)\n",
+ 			   wc->status, wr_id, wc->vendor_err);
+-		++dev->stats.rx_dropped;
++		++priv->stats.rx_dropped;
+ 		if (has_srq)
+ 			goto repost;
+ 		else {
+@@ -646,7 +646,7 @@ void ipoib_cm_handle_rx_wc(struct net_de
+ 		 * this packet and reuse the old buffer.
+ 		 */
+ 		ipoib_dbg(priv, "failed to allocate receive buffer %d\n", wr_id);
+-		++dev->stats.rx_dropped;
++		++priv->stats.rx_dropped;
+ 		goto repost;
+ 	}
+ 
+@@ -664,8 +664,8 @@ copied:
+ 	skb_pull(skb, IPOIB_ENCAP_LEN);
+ 
+ 	dev->last_rx = jiffies;
+-	++dev->stats.rx_packets;
+-	dev->stats.rx_bytes += skb->len;
++	++priv->stats.rx_packets;
++	priv->stats.rx_bytes += skb->len;
+ 
+ 	skb->dev = dev;
+ 	/* XXX get correct PACKET_ type here */
+@@ -714,8 +714,8 @@ void ipoib_cm_send(struct net_device *de
+ 	if (unlikely(skb->len > tx->mtu)) {
+ 		ipoib_warn(priv, "packet len %d (> %d) too long to send, dropping\n",
+ 			   skb->len, tx->mtu);
+-		++dev->stats.tx_dropped;
+-		++dev->stats.tx_errors;
++		++priv->stats.tx_dropped;
++		++priv->stats.tx_errors;
+ 		ipoib_cm_skb_too_long(dev, skb, tx->mtu - IPOIB_ENCAP_LEN);
+ 		return;
+ 	}
+@@ -734,7 +734,7 @@ void ipoib_cm_send(struct net_device *de
+ 	tx_req->skb = skb;
+ 	addr = ib_dma_map_single(priv->ca, skb->data, skb->len, DMA_TO_DEVICE);
+ 	if (unlikely(ib_dma_mapping_error(priv->ca, addr))) {
+-		++dev->stats.tx_errors;
++		++priv->stats.tx_errors;
+ 		dev_kfree_skb_any(skb);
+ 		return;
+ 	}
+@@ -744,7 +744,7 @@ void ipoib_cm_send(struct net_device *de
+ 	if (unlikely(post_send(priv, tx, tx->tx_head & (ipoib_sendq_size - 1),
+ 			       addr, skb->len))) {
+ 		ipoib_warn(priv, "post_send failed\n");
+-		++dev->stats.tx_errors;
++		++priv->stats.tx_errors;
+ 		ib_dma_unmap_single(priv->ca, addr, skb->len, DMA_TO_DEVICE);
+ 		dev_kfree_skb_any(skb);
+ 	} else {
+@@ -783,8 +783,8 @@ void ipoib_cm_handle_tx_wc(struct net_de
+ 	ib_dma_unmap_single(priv->ca, tx_req->mapping, tx_req->skb->len, DMA_TO_DEVICE);
+ 
+ 	/* FIXME: is this right? Shouldn't we only increment on success? */
+-	++dev->stats.tx_packets;
+-	dev->stats.tx_bytes += tx_req->skb->len;
++	++priv->stats.tx_packets;
++	priv->stats.tx_bytes += tx_req->skb->len;
+ 
+ 	dev_kfree_skb_any(tx_req->skb);
+ 
+Index: ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_ib.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check.orig/drivers/infiniband/ulp/ipoib/ipoib_ib.c	2011-09-14 14:26:44.000000000 +0300
++++ ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_ib.c	2011-09-14 14:31:23.000000000 +0300
+@@ -262,7 +262,7 @@ static void ipoib_ib_handle_rx_wc(struct
+ 	 * this packet and reuse the old buffer.
+ 	 */
+ 	if (unlikely(!ipoib_alloc_rx_skb(dev, wr_id))) {
+-		++dev->stats.rx_dropped;
++		++priv->stats.rx_dropped;
+ 		goto repost;
+ 	}
+ 
+@@ -289,8 +289,8 @@ static void ipoib_ib_handle_rx_wc(struct
+ 	skb_pull(skb, IPOIB_ENCAP_LEN);
+ 
+ 	dev->last_rx = jiffies;
+-	++dev->stats.rx_packets;
+-	dev->stats.rx_bytes += skb->len;
++	++priv->stats.rx_packets;
++	priv->stats.rx_bytes += skb->len;
+ 
+ 	skb->dev = dev;
+ 	if (test_bit(IPOIB_FLAG_CSUM, &priv->flags) && likely(wc->csum_ok))
+@@ -387,8 +387,8 @@ static void ipoib_ib_handle_tx_wc(struct
+ 
+ 	ipoib_dma_unmap_tx(priv->ca, tx_req);
+ 
+-	++dev->stats.tx_packets;
+-	dev->stats.tx_bytes += tx_req->skb->len;
++	++priv->stats.tx_packets;
++	priv->stats.tx_bytes += tx_req->skb->len;
+ 
+ 	dev_kfree_skb_any(tx_req->skb);
+ 
+@@ -416,20 +416,20 @@ static int poll_tx(struct ipoib_dev_priv
+ 	return n == MAX_SEND_CQE;
+ }
+ 
+-int ipoib_poll(struct napi_struct *napi, int budget)
++int ipoib_poll(struct net_device *dev, int *budget)
+ {
+-	struct ipoib_dev_priv *priv = container_of(napi, struct ipoib_dev_priv, napi);
+-	struct net_device *dev = priv->dev;
++	struct ipoib_dev_priv *priv = netdev_priv(dev);
++	int max = min(*budget, dev->quota);
+ 	int done;
+ 	int t;
+ 	int n, i;
++	int ret;
+ 
+ 	done  = 0;
+ 
+ 	spin_lock(&priv->rx_ring_lock);
+ poll_more:
+-	while (done < budget) {
+-		int max = (budget - done);
++	while (max) {
+ 
+ 		t = min(IPOIB_NUM_WC, max);
+ 		n = ib_poll_cq(priv->recv_cq, t, priv->ibwc);
+@@ -439,6 +439,7 @@ poll_more:
+ 
+ 			if (wc->wr_id & IPOIB_OP_RECV) {
+ 				++done;
++				--max;
+ 				if (wc->wr_id & IPOIB_OP_CM)
+ 					ipoib_cm_handle_rx_wc(dev, wc);
+ 				else
+@@ -451,20 +452,25 @@ poll_more:
+ 			break;
+ 	}
+ 
+-	if (done < budget) {
++	if (max) {
+ 		if (dev->features & NETIF_F_LRO)
+ 			lro_flush_all(&priv->lro.lro_mgr);
+ 
+-		napi_complete(napi);
++		netif_rx_complete(dev);
+ 		if (unlikely(ib_req_notify_cq(priv->recv_cq,
+ 					      IB_CQ_NEXT_COMP |
+ 					      IB_CQ_REPORT_MISSED_EVENTS)) &&
+-		    napi_reschedule(napi))
++		    netif_rx_reschedule(dev, 0))
+ 			goto poll_more;
+-	}
++		ret = 0;
++	} else
++		ret = 1;
++
++	dev->quota -= done;
++	*budget    -= done;
+ 
+ 	spin_unlock(&priv->rx_ring_lock);
+-	return done;
++	return ret;
+ }
+ 
+ void ipoib_get_tcp_ring(struct net_device *dev, u8 *poll_ring, u32 saddr, u32 daddr, u16 sport, u16 dport)
+@@ -513,10 +519,7 @@ void ipoib_accl_poll(struct net_device *
+ 
+ void ipoib_ib_completion(struct ib_cq *cq, void *dev_ptr)
+ {
+-	struct net_device *dev = dev_ptr;
+-	struct ipoib_dev_priv *priv = netdev_priv(dev);
+-
+-	napi_schedule(&priv->napi);
++	netif_rx_schedule(dev_ptr);
+ }
+ 
+ static void drain_tx_cq(struct net_device *dev)
+@@ -593,8 +596,8 @@ void ipoib_send(struct net_device *dev, 
+ 		phead = skb->data;
+ 		if (unlikely(!skb_pull(skb, hlen))) {
+ 			ipoib_warn(priv, "linear data too small\n");
+-			++dev->stats.tx_dropped;
+-			++dev->stats.tx_errors;
++			++priv->stats.tx_dropped;
++			++priv->stats.tx_errors;
+ 			dev_kfree_skb_any(skb);
+ 			return;
+ 		}
+@@ -602,8 +605,8 @@ void ipoib_send(struct net_device *dev, 
+ 		if (unlikely(skb->len > priv->mcast_mtu + IPOIB_ENCAP_LEN)) {
+ 			ipoib_warn(priv, "packet len %d (> %d) too long to send, dropping\n",
+ 				   skb->len, priv->mcast_mtu + IPOIB_ENCAP_LEN);
+-			++dev->stats.tx_dropped;
+-			++dev->stats.tx_errors;
++			++priv->stats.tx_dropped;
++			++priv->stats.tx_errors;
+ 			ipoib_cm_skb_too_long(dev, skb, priv->mcast_mtu);
+ 			return;
+ 		}
+@@ -624,7 +627,7 @@ void ipoib_send(struct net_device *dev, 
+ 	tx_req = &priv->tx_ring[priv->tx_head & (ipoib_sendq_size - 1)];
+ 	tx_req->skb = skb;
+ 	if (unlikely(ipoib_dma_map_tx(priv->ca, tx_req))) {
+-		++dev->stats.tx_errors;
++		++priv->stats.tx_errors;
+ 		dev_kfree_skb_any(skb);
+ 		return;
+ 	}
+@@ -644,7 +647,7 @@ void ipoib_send(struct net_device *dev, 
+ 	if (unlikely(post_send(priv, priv->tx_head & (ipoib_sendq_size - 1),
+ 			       address->ah, qpn, tx_req, phead, hlen))) {
+ 		ipoib_warn(priv, "post_send failed\n");
+-		++dev->stats.tx_errors;
++		++priv->stats.tx_errors;
+ 		--priv->tx_outstanding;
+ 		ipoib_dma_unmap_tx(priv->ca, tx_req);
+ 		dev_kfree_skb_any(skb);
+@@ -758,8 +761,7 @@ int ipoib_ib_dev_open(struct net_device 
+ 	queue_delayed_work(ipoib_workqueue, &priv->ah_reap_task,
+ 			   round_jiffies_relative(HZ));
+ 
+-	if (!test_and_set_bit(IPOIB_FLAG_INITIALIZED, &priv->flags))
+-		napi_enable(&priv->napi);
++	set_bit(IPOIB_FLAG_INITIALIZED, &priv->flags);
+ 
+ 	return 0;
+ }
+@@ -884,8 +886,8 @@ int ipoib_ib_dev_stop(struct net_device 
+ 	struct ipoib_tx_buf *tx_req;
+ 	int i;
+ 
+-	if (test_and_clear_bit(IPOIB_FLAG_INITIALIZED, &priv->flags))
+-		napi_disable(&priv->napi);
++	clear_bit(IPOIB_FLAG_INITIALIZED, &priv->flags);
++	netif_poll_disable(dev);
+ 
+ 	ipoib_cm_dev_stop(dev);
+ 
+@@ -954,6 +956,7 @@ timeout:
+ 
+ 	ipoib_ah_dev_cleanup(dev);
+ 
++	netif_poll_enable(dev);
+ 	ib_req_notify_cq(priv->recv_cq, IB_CQ_NEXT_COMP);
+ 
+ 	return 0;
+Index: ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check.orig/drivers/infiniband/ulp/ipoib/ipoib_main.c	2011-09-14 14:31:22.000000000 +0300
++++ ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_main.c	2011-09-14 15:55:42.000000000 +0300
+@@ -607,7 +607,7 @@ static void neigh_add_path(struct sk_buf
+ 
+ 	neigh = ipoib_neigh_alloc(skb->dst->neighbour, skb->dev);
+ 	if (!neigh) {
+-		++dev->stats.tx_dropped;
++		++priv->stats.tx_dropped;
+ 		dev_kfree_skb_any(skb);
+ 		return;
+ 	}
+@@ -668,7 +668,7 @@ err_list:
+ err_path:
+ 	ipoib_neigh_free(dev, neigh);
+ err_drop:
+-	++dev->stats.tx_dropped;
++	++priv->stats.tx_dropped;
+ 	dev_kfree_skb_any(skb);
+ 
+ 	spin_unlock_irqrestore(&priv->lock, flags);
+@@ -720,7 +720,7 @@ static void unicast_arp_send(struct sk_b
+ 			} else
+ 				__path_add(dev, path);
+ 		} else {
+-			++dev->stats.tx_dropped;
++			++priv->stats.tx_dropped;
+ 			dev_kfree_skb_any(skb);
+ 		}
+ 
+@@ -739,7 +739,7 @@ static void unicast_arp_send(struct sk_b
+ 		skb_push(skb, sizeof *phdr);
+ 		__skb_queue_tail(&path->queue, skb);
+ 	} else {
+-		++dev->stats.tx_dropped;
++		++priv->stats.tx_dropped;
+ 		dev_kfree_skb_any(skb);
+ 	}
+ 
+@@ -796,7 +796,7 @@ static int ipoib_start_xmit(struct sk_bu
+ 			__skb_queue_tail(&neigh->queue, skb);
+ 			spin_unlock_irqrestore(&priv->lock, flags);
+ 		} else {
+-			++dev->stats.tx_dropped;
++			++priv->stats.tx_dropped;
+ 			dev_kfree_skb_any(skb);
+ 		}
+ 	} else {
+@@ -821,7 +821,7 @@ static int ipoib_start_xmit(struct sk_bu
+ 					   IPOIB_QPN(phdr->hwaddr),
+ 					   phdr->hwaddr + 4);
+ 				dev_kfree_skb_any(skb);
+-				++dev->stats.tx_dropped;
++				++priv->stats.tx_dropped;
+ 				return NETDEV_TX_OK;
+ 			}
+ 
+@@ -847,7 +847,7 @@ static void ipoib_timeout(struct net_dev
+ static int ipoib_hard_header(struct sk_buff *skb,
+ 			     struct net_device *dev,
+ 			     unsigned short type,
+-			     const void *daddr, const void *saddr, unsigned len)
++			     void *daddr, void *saddr, unsigned len)
+ {
+ 	struct ipoib_header *header;
+ 
+@@ -939,9 +939,10 @@ struct ipoib_neigh *ipoib_neigh_alloc(st
+ void ipoib_neigh_free(struct net_device *dev, struct ipoib_neigh *neigh)
+ {
+ 	struct sk_buff *skb;
++	struct ipoib_dev_priv *priv = netdev_priv(dev);
+ 	*to_ipoib_neigh(neigh->neighbour) = NULL;
+ 	while ((skb = __skb_dequeue(&neigh->queue))) {
+-		++dev->stats.tx_dropped;
++		++priv->stats.tx_dropped;
+ 		dev_kfree_skb_any(skb);
+ 	}
+ 	if (ipoib_cm_get(neigh))
+@@ -1020,9 +1021,9 @@ static void ipoib_auto_moderation(struct
+ 	if (!priv->ethtool.use_adaptive_rx_coalesce)
+ 		return;
+ 
+-	rx_packets = priv->dev->stats.rx_packets;
+-	rx_bytes = priv->dev->stats.rx_bytes;
+-	tx_packets = priv->dev->stats.tx_packets;
++	rx_packets = priv->stats.rx_packets;
++	rx_bytes = priv->stats.rx_bytes;
++	tx_packets = priv->stats.tx_packets;
+ 
+ 	tx_pkt_diff = tx_packets - priv->ethtool.last_moder_tx_packets;
+ 	rx_pkt_diff = rx_packets - priv->ethtool.last_moder_packets;
+@@ -1159,10 +1160,6 @@ void ipoib_dev_cleanup(struct net_device
+ 	priv->tx_ring = NULL;
+ }
+ 
+-static const struct header_ops ipoib_header_ops = {
+-	.create	= ipoib_hard_header,
+-};
+-
+ static int get_skb_hdr(struct sk_buff *skb, void **iphdr,
+ 		       void **tcph, u64 *hdr_flags, void *priv)
+ {
+@@ -1220,13 +1217,13 @@ static void ipoib_setup(struct net_devic
+ 	dev->change_mtu		 = ipoib_change_mtu;
+ 	dev->hard_start_xmit	 = ipoib_start_xmit;
+ 	dev->tx_timeout		 = ipoib_timeout;
+-	dev->header_ops		 = &ipoib_header_ops;
++	dev->hard_header         = ipoib_hard_header;
+ 	dev->set_multicast_list	 = ipoib_set_mcast_list;
+ 	dev->neigh_setup	 = ipoib_neigh_setup_dev;
+-
+ 	ipoib_set_ethtool_ops(dev);
++	dev->poll                = ipoib_poll;
++	dev->weight              = 100;
+ 
+-	netif_napi_add(dev, &priv->napi, ipoib_poll, 100);
+ 
+ 	dev->watchdog_timeo	 = HZ;
+ 
+Index: ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check.orig/drivers/infiniband/ulp/ipoib/ipoib_multicast.c	2011-09-14 14:26:44.000000000 +0300
++++ ofa_1_5_dev_kernel-20110914-1422_linux-2.6.18-238.el5_check/drivers/infiniband/ulp/ipoib/ipoib_multicast.c	2011-09-14 15:46:37.000000000 +0300
+@@ -100,7 +100,7 @@ static void ipoib_mcast_free(struct ipoi
+ 	}
+ 
+ 	netif_tx_lock_bh(dev);
+-	dev->stats.tx_dropped += tx_dropped;
++	priv->stats.tx_dropped += tx_dropped;
+ 	netif_tx_unlock_bh(dev);
+ 
+ 	kfree(mcast);
+@@ -283,6 +283,7 @@ ipoib_mcast_sendonly_join_complete(int s
+ {
+ 	struct ipoib_mcast *mcast = multicast->context;
+ 	struct net_device *dev = mcast->dev;
++	struct ipoib_dev_priv *priv = netdev_priv(dev);
+ 
+ 	/* We trap for port events ourselves. */
+ 	if (status == -ENETRESET)
+@@ -299,7 +300,7 @@ ipoib_mcast_sendonly_join_complete(int s
+ 		/* Flush out any queued packets */
+ 		netif_tx_lock_bh(dev);
+ 		while (!skb_queue_empty(&mcast->pkt_queue)) {
+-			++dev->stats.tx_dropped;
++			++priv->stats.tx_dropped;
+ 			dev_kfree_skb_any(skb_dequeue(&mcast->pkt_queue));
+ 		}
+ 		netif_tx_unlock_bh(dev);
+@@ -713,7 +714,7 @@ void ipoib_mcast_send(struct net_device 
+ 	if (!test_bit(IPOIB_FLAG_OPER_UP, &priv->flags)		||
+ 	    !priv->broadcast					||
+ 	    !test_bit(IPOIB_MCAST_FLAG_ATTACHED, &priv->broadcast->flags)) {
+-		++dev->stats.tx_dropped;
++		++priv->stats.tx_dropped;
+ 		dev_kfree_skb_any(skb);
+ 		goto unlock;
+ 	}
+@@ -728,7 +729,7 @@ void ipoib_mcast_send(struct net_device 
+ 		if (!mcast) {
+ 			ipoib_warn(priv, "unable to allocate memory for "
+ 				   "multicast structure\n");
+-			++dev->stats.tx_dropped;
++			++priv->stats.tx_dropped;
+ 			dev_kfree_skb_any(skb);
+ 			goto out;
+ 		}
+@@ -743,7 +744,7 @@ void ipoib_mcast_send(struct net_device 
+ 		if (skb_queue_len(&mcast->pkt_queue) < IPOIB_MAX_MCAST_QUEUE)
+ 			skb_queue_tail(&mcast->pkt_queue, skb);
+ 		else {
+-			++dev->stats.tx_dropped;
++			++priv->stats.tx_dropped;
+ 			dev_kfree_skb_any(skb);
+ 		}
+ 

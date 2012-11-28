@@ -1,0 +1,17 @@
+Index: ofed_kernel-2.6.16_sles10_sp2/drivers/net/mlx4_vnic/vnic_qp.c
+===================================================================
+--- ofed_kernel-2.6.16_sles10_sp2.orig/drivers/net/mlx4_vnic/vnic_qp.c	2010-11-03 18:14:02.083612795 +0200
++++ ofed_kernel-2.6.16_sles10_sp2/drivers/net/mlx4_vnic/vnic_qp.c	2010-11-03 18:14:59.119610982 +0200
+@@ -1936,7 +1936,11 @@ static int lay_inline_data(struct mlx4_i
+  */
+ static void mlx4_bf_copy(unsigned long *dst, unsigned long *src, unsigned bytecnt)
+ {
+-	__iowrite64_copy(dst, src, bytecnt / 8);
++	while (bytecnt > 0) {
++		*dst++ = *src++;
++		*dst++ = *src++;
++		bytecnt -= 2 * sizeof (long);
++	}
+ }
+ 
+ int mlx4_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,

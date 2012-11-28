@@ -1,0 +1,256 @@
+From b1e4594ba097634e9436cc4c6ba95f70a2d627ff Mon Sep 17 00:00:00 2001
+From: Al Viro <viro@zeniv.linux.org.uk>
+Date: Mon, 18 Jan 2010 01:38:00 -0500
+Subject: [PATCH] switch infiniband uverbs to anon_inodes
+
+Signed-off-by: Al Viro <viro@zeniv.linux.org.uk>
+---
+ drivers/infiniband/Kconfig            |    1 +
+ drivers/infiniband/core/uverbs.h      |    2 +-
+ drivers/infiniband/core/uverbs_cmd.c  |   25 ++++++++--
+ drivers/infiniband/core/uverbs_main.c |   82 +++------------------------------
+ 4 files changed, 29 insertions(+), 81 deletions(-)
+
+Index: ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/Kconfig
+===================================================================
+--- ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check.orig/drivers/infiniband/Kconfig	2011-06-17 21:32:51.000000000 +0300
++++ ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/Kconfig	2011-06-19 14:07:21.000000000 +0300
+@@ -20,6 +20,7 @@ config INFINIBAND_USER_MAD
+ 
+ config INFINIBAND_USER_ACCESS
+ 	tristate "InfiniBand userspace access (verbs and CM)"
++	select ANON_INODES
+ 	---help---
+ 	  Userspace InfiniBand access support.  This enables the
+ 	  kernel side of userspace verbs and the userspace
+Index: ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs.h
+===================================================================
+--- ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check.orig/drivers/infiniband/core/uverbs.h	2011-06-19 14:06:52.000000000 +0300
++++ ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs.h	2011-06-19 14:07:21.000000000 +0300
+@@ -151,7 +151,7 @@ extern struct idr ib_uverbs_xrc_domain_i
+ void idr_remove_uobj(struct idr *idp, struct ib_uobject *uobj);
+ 
+ struct file *ib_uverbs_alloc_event_file(struct ib_uverbs_file *uverbs_file,
+-					int is_async, int *fd);
++					int is_async);
+ struct ib_uverbs_event_file *ib_uverbs_lookup_comp_file(int fd);
+ 
+ void ib_uverbs_release_ucq(struct ib_uverbs_file *file,
+Index: ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs_cmd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check.orig/drivers/infiniband/core/uverbs_cmd.c	2011-06-17 21:33:05.000000000 +0300
++++ ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs_cmd.c	2011-06-19 14:07:21.000000000 +0300
+@@ -318,10 +318,15 @@ ssize_t ib_uverbs_get_context(struct ib_
+ 
+ 	resp.num_comp_vectors = file->device->num_comp_vectors;
+ 
+-	filp = ib_uverbs_alloc_event_file(file, 1, &resp.async_fd);
++	ret = get_unused_fd();
++	if (ret < 0)
++		goto err_free;
++	resp.async_fd = ret;
++
++	filp = ib_uverbs_alloc_event_file(file, 1);
+ 	if (IS_ERR(filp)) {
+ 		ret = PTR_ERR(filp);
+-		goto err_free;
++		goto err_fd;
+ 	}
+ 
+ 	if (copy_to_user((void __user *) (unsigned long) cmd.response,
+@@ -349,9 +354,11 @@ ssize_t ib_uverbs_get_context(struct ib_
+ 	return in_len;
+ 
+ err_file:
+-	put_unused_fd(resp.async_fd);
+ 	fput(filp);
+ 
++err_fd:
++	put_unused_fd(resp.async_fd);
++
+ err_free:
+ 	ibdev->dealloc_ucontext(ucontext);
+ 
+@@ -733,6 +740,7 @@ ssize_t ib_uverbs_create_comp_channel(st
+ 	struct ib_uverbs_create_comp_channel	   cmd;
+ 	struct ib_uverbs_create_comp_channel_resp  resp;
+ 	struct file				  *filp;
++	int ret;
+ 
+ 	if (out_len < sizeof resp)
+ 		return -ENOSPC;
+@@ -740,9 +748,16 @@ ssize_t ib_uverbs_create_comp_channel(st
+ 	if (copy_from_user(&cmd, buf, sizeof cmd))
+ 		return -EFAULT;
+ 
+-	filp = ib_uverbs_alloc_event_file(file, 0, &resp.fd);
+-	if (IS_ERR(filp))
++	ret = get_unused_fd();
++	if (ret < 0)
++		return ret;
++	resp.fd = ret;
++
++	filp = ib_uverbs_alloc_event_file(file, 0);
++	if (IS_ERR(filp)) {
++		put_unused_fd(resp.fd);
+ 		return PTR_ERR(filp);
++	}
+ 
+ 	if (copy_to_user((void __user *) (unsigned long) cmd.response,
+ 			 &resp, sizeof resp)) {
+Index: ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check.orig/drivers/infiniband/core/uverbs_main.c	2011-06-19 14:06:52.000000000 +0300
++++ ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/infiniband/core/uverbs_main.c	2011-06-19 14:07:49.000000000 +0300
+@@ -41,9 +41,9 @@
+ #include <linux/fs.h>
+ #include <linux/poll.h>
+ #include <linux/file.h>
+-#include <linux/mount.h>
+ #include <linux/cdev.h>
+ #include <linux/sched.h>
++#include <linux/anon_inodes.h>
+ #include <linux/slab.h>
+ 
+ #include <asm/uaccess.h>
+@@ -54,8 +54,6 @@ MODULE_AUTHOR("Roland Dreier");
+ MODULE_DESCRIPTION("InfiniBand userspace verbs access");
+ MODULE_LICENSE("Dual BSD/GPL");
+ 
+-#define INFINIBANDEVENTFS_MAGIC	0x49426576	/* "IBev" */
+-
+ enum {
+ 	IB_UVERBS_MAJOR       = 231,
+ 	IB_UVERBS_BASE_MINOR  = 192,
+@@ -121,8 +119,6 @@ static ssize_t (*uverbs_cmd_table[])(str
+ 	[IB_USER_VERBS_CMD_UNREG_XRC_RCV_QP]	= ib_uverbs_unreg_xrc_rcv_qp,
+ };
+ 
+-static struct vfsmount *uverbs_event_mnt;
+-
+ static void ib_uverbs_add_one(struct ib_device *device);
+ static void ib_uverbs_remove_one(struct ib_device *device);
+ 
+@@ -528,12 +524,10 @@ void ib_uverbs_xrc_rcv_qp_event_handler(
+ }
+ 
+ struct file *ib_uverbs_alloc_event_file(struct ib_uverbs_file *uverbs_file,
+-					int is_async, int *fd)
++					int is_async)
+ {
+ 	struct ib_uverbs_event_file *ev_file;
+-	struct path path;
+ 	struct file *filp;
+-	int ret;
+ 
+ 	ev_file = kmalloc(sizeof *ev_file, GFP_KERNEL);
+ 	if (!ev_file)
+@@ -548,38 +542,12 @@ struct file *ib_uverbs_alloc_event_file(
+ 	ev_file->is_async    = is_async;
+ 	ev_file->is_closed   = 0;
+ 
+-	*fd = get_unused_fd();
+-	if (*fd < 0) {
+-		ret = *fd;
+-		goto err;
+-	}
+-
+-	/*
+-	 * fops_get() can't fail here, because we're coming from a
+-	 * system call on a uverbs file, which will already have a
+-	 * module reference.
+-	 */
+-	path.mnt = uverbs_event_mnt;
+-	path.dentry = uverbs_event_mnt->mnt_root;
+-	path_get(&path);
+-	filp = alloc_file(&path, FMODE_READ, fops_get(&uverbs_event_fops));
+-	if (!filp) {
+-		ret = -ENFILE;
+-		goto err_fd;
+-	}
+-
+-	filp->private_data = ev_file;
++	filp = anon_inode_getfile("[infinibandevent]", &uverbs_event_fops,
++				  ev_file, O_RDONLY);
++	if (IS_ERR(filp))
++		kfree(ev_file);
+ 
+ 	return filp;
+-
+-err_fd:
+-	fops_put(&uverbs_event_fops);
+-	path_put(&path);
+-	put_unused_fd(*fd);
+-
+-err:
+-	kfree(ev_file);
+-	return ERR_PTR(ret);
+ }
+ 
+ /*
+@@ -864,21 +832,6 @@ static void ib_uverbs_remove_one(struct 
+ 	kfree(uverbs_dev);
+ }
+ 
+-static int uverbs_event_get_sb(struct file_system_type *fs_type, int flags,
+-			       const char *dev_name, void *data,
+-			       struct vfsmount *mnt)
+-{
+-	return get_sb_pseudo(fs_type, "infinibandevent:", NULL,
+-			     INFINIBANDEVENTFS_MAGIC, mnt);
+-}
+-
+-static struct file_system_type uverbs_event_fs = {
+-	/* No owner field so module can be unloaded */
+-	.name    = "infinibandeventfs",
+-	.get_sb  = uverbs_event_get_sb,
+-	.kill_sb = kill_litter_super
+-};
+-
+ static int __init ib_uverbs_init(void)
+ {
+ 	int ret;
+@@ -905,33 +858,14 @@ static int __init ib_uverbs_init(void)
+ 		goto out_class;
+ 	}
+ 
+-	ret = register_filesystem(&uverbs_event_fs);
+-	if (ret) {
+-		printk(KERN_ERR "user_verbs: couldn't register infinibandeventfs\n");
+-		goto out_class;
+-	}
+-
+-	uverbs_event_mnt = kern_mount(&uverbs_event_fs);
+-	if (IS_ERR(uverbs_event_mnt)) {
+-		ret = PTR_ERR(uverbs_event_mnt);
+-		printk(KERN_ERR "user_verbs: couldn't mount infinibandeventfs\n");
+-		goto out_fs;
+-	}
+-
+ 	ret = ib_register_client(&uverbs_client);
+ 	if (ret) {
+ 		printk(KERN_ERR "user_verbs: couldn't register client\n");
+-		goto out_mnt;
++		goto out_class;
+ 	}
+ 
+ 	return 0;
+ 
+-out_mnt:
+-	mntput(uverbs_event_mnt);
+-
+-out_fs:
+-	unregister_filesystem(&uverbs_event_fs);
+-
+ out_class:
+ 	class_destroy(uverbs_class);
+ 
+@@ -945,8 +879,6 @@ out:
+ static void __exit ib_uverbs_cleanup(void)
+ {
+ 	ib_unregister_client(&uverbs_client);
+-	mntput(uverbs_event_mnt);
+-	unregister_filesystem(&uverbs_event_fs);
+ 	class_destroy(uverbs_class);
+ 	unregister_chrdev_region(IB_UVERBS_BASE_DEV, IB_UVERBS_MAX_DEVICES);
+ 	idr_destroy(&ib_uverbs_pd_idr);

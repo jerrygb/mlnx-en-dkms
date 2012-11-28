@@ -1,0 +1,13 @@
+Index: ofed_kernel-2.6.36/drivers/infiniband/core/addr.c
+===================================================================
+--- ofed_kernel-2.6.36.orig/drivers/infiniband/core/addr.c	2010-11-09 10:48:13.891203204 +0200
++++ ofed_kernel-2.6.36/drivers/infiniband/core/addr.c	2010-11-09 10:48:45.332327230 +0200
+@@ -215,7 +215,7 @@
+ 
+ 	neigh = neigh_lookup(&arp_tbl, &rt->rt_gateway, rt->idev->dev);
+ 	if (!neigh || !(neigh->nud_state & NUD_VALID)) {
+-		neigh_event_send(rt->u.dst.neighbour, NULL);
++		neigh_event_send(rt->dst.neighbour, NULL);
+ 		ret = -ENODATA;
+ 		if (neigh)
+ 			goto release;

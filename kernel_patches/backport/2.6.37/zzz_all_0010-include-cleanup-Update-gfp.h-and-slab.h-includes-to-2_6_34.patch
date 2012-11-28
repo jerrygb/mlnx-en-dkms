@@ -1,0 +1,1523 @@
+commit 5a0e3ad6af8660be21ca98a971cd00f331318c05
+Author: Tejun Heo <tj@kernel.org>
+Date:   Wed Mar 24 17:04:11 2010 +0900
+
+    include cleanup: Update gfp.h and slab.h includes to prepare for breaking implicit slab.h inclusion from percpu.h
+    
+    percpu.h is included by sched.h and module.h and thus ends up being
+    included when building most .c files.  percpu.h includes slab.h which
+    in turn includes gfp.h making everything defined by the two files
+    universally available and complicating inclusion dependencies.
+    
+    percpu.h -> slab.h dependency is about to be removed.  Prepare for
+    this change by updating users of gfp and slab facilities include those
+    headers directly instead of assuming availability.  As this conversion
+    needs to touch large number of source files, the following script is
+    used as the basis of conversion.
+    
+      http://userweb.kernel.org/~tj/misc/slabh-sweep.py
+    
+    The script does the followings.
+    
+    * Scan files for gfp and slab usages and update includes such that
+      only the necessary includes are there.  ie. if only gfp is used,
+      gfp.h, if slab is used, slab.h.
+    
+    * When the script inserts a new include, it looks at the include
+      blocks and try to put the new include such that its order conforms
+      to its surrounding.  It's put in the include block which contains
+      core kernel includes, in the same order that the rest are ordered -
+      alphabetical, Christmas tree, rev-Xmas-tree or at the end if there
+      doesn't seem to be any matching order.
+    
+    * If the script can't find a place to put a new include (mostly
+      because the file doesn't have fitting include block), it prints out
+      an error message indicating which .h file needs to be added to the
+      file.
+    
+    The conversion was done in the following steps.
+    
+    1. The initial automatic conversion of all .c files updated slightly
+       over 4000 files, deleting around 700 includes and adding ~480 gfp.h
+       and ~3000 slab.h inclusions.  The script emitted errors for ~400
+       files.
+    
+    2. Each error was manually checked.  Some didn't need the inclusion,
+       some needed manual addition while adding it to implementation .h or
+       embedding .c file was more appropriate for others.  This step added
+       inclusions to around 150 files.
+    
+    3. The script was run again and the output was compared to the edits
+       from #2 to make sure no file was left behind.
+    
+    4. Several build tests were done and a couple of problems were fixed.
+       e.g. lib/decompress_*.c used malloc/free() wrappers around slab
+       APIs requiring slab.h to be added manually.
+    
+    5. The script was run on all .h files but without automatically
+       editing them as sprinkling gfp.h and slab.h inclusions around .h
+       files could easily lead to inclusion dependency hell.  Most gfp.h
+       inclusion directives were ignored as stuff from gfp.h was usually
+       wildly available and often used in preprocessor macros.  Each
+       slab.h inclusion directive was examined and added manually as
+       necessary.
+    
+    6. percpu.h was updated not to include slab.h.
+    
+    7. Build test were done on the following configurations and failures
+       were fixed.  CONFIG_GCOV_KERNEL was turned off for all tests (as my
+       distributed build env didn't work with gcov compiles) and a few
+       more options had to be turned off depending on archs to make things
+       build (like ipr on powerpc/64 which failed due to missing writeq).
+    
+       * x86 and x86_64 UP and SMP allmodconfig and a custom test config.
+       * powerpc and powerpc64 SMP allmodconfig
+       * sparc and sparc64 SMP allmodconfig
+       * ia64 SMP allmodconfig
+       * s390 SMP allmodconfig
+       * alpha SMP allmodconfig
+       * um on x86_64 SMP allmodconfig
+    
+    8. percpu.h modifications were reverted so that it could be applied as
+       a separate patch and serve as bisection point.
+    
+    Given the fact that I had only a couple of failures from tests on step
+    6, I'm fairly confident about the coverage of this conversion patch.
+    If there is a breakage, it's likely to be something in one of the arch
+    headers which should be easily discoverable easily on most builds of
+    the specific arch.
+    
+    Signed-off-by: Tejun Heo <tj@kernel.org>
+    Guess-its-ok-by: Christoph Lameter <cl@linux-foundation.org>
+    Cc: Ingo Molnar <mingo@redhat.com>
+    Cc: Lee Schermerhorn <Lee.Schermerhorn@hp.com>
+
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/addr.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/addr.c	2011-08-29 17:44:09.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/addr.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/mutex.h>
+ #include <linux/inetdevice.h>
++#include <linux/slab.h>
+ #include <linux/workqueue.h>
+ #include <net/arp.h>
+ #include <net/neighbour.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/cm.c	2011-08-29 17:49:58.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -42,6 +42,7 @@
+ #include <linux/random.h>
+ #include <linux/rbtree.h>
+ #include <linux/spinlock.h>
++#include <linux/slab.h>
+ #include <linux/sysfs.h>
+ #include <linux/workqueue.h>
+ #include <linux/kdev_t.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/cma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/cma.c	2011-08-29 17:49:58.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/cma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -40,6 +40,7 @@
+ #include <linux/random.h>
+ #include <linux/idr.h>
+ #include <linux/inetdevice.h>
++#include <linux/slab.h>
+ 
+ #include <net/tcp.h>
+ #include <net/ipv6.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/iwcm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/iwcm.c	2011-08-29 17:50:19.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/iwcm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -44,6 +44,7 @@
+ #include <linux/workqueue.h>
+ #include <linux/completion.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <rdma/iw_cm.h>
+ #include <rdma/ib_addr.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/mad.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/mad.c	2011-08-29 17:44:23.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/mad.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+  *
+  */
+ #include <linux/dma-mapping.h>
++#include <linux/slab.h>
+ #include <rdma/ib_cache.h>
+ 
+ #include "mad_priv.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/mad_rmpp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/mad_rmpp.c	2011-08-29 17:44:01.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/mad_rmpp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "mad_priv.h"
+ #include "mad_rmpp.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/multicast.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/multicast.c	2011-08-29 17:49:55.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/multicast.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/err.h>
+ #include <linux/interrupt.h>
++#include <linux/slab.h>
+ #include <linux/bitops.h>
+ #include <linux/random.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/ucm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/ucm.c	2011-08-29 17:50:22.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/ucm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -44,6 +44,7 @@
+ #include <linux/idr.h>
+ #include <linux/mutex.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <asm/uaccess.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/ucma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/ucma.c	2011-08-29 17:50:19.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/ucma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -39,6 +39,7 @@
+ #include <linux/in6.h>
+ #include <linux/miscdevice.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <rdma/rdma_user_cm.h>
+ #include <rdma/ib_marshall.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/umem.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/umem.c	2011-08-29 17:43:58.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/umem.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/sched.h>
+ #include <linux/hugetlb.h>
+ #include <linux/dma-attrs.h>
++#include <linux/slab.h>
+ 
+ #include "uverbs.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/user_mad.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/user_mad.c	2011-08-29 17:50:22.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/user_mad.c	2011-08-29 18:09:27.000000000 +0300
+@@ -46,6 +46,7 @@
+ #include <linux/compat.h>
+ #include <linux/semaphore.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <asm/uaccess.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/uverbs_cmd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/uverbs_cmd.c	2011-08-29 17:44:28.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/uverbs_cmd.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/file.h>
+ #include <linux/fs.h>
++#include <linux/slab.h>
+ 
+ #include <asm/uaccess.h>
+ #include <asm/fcntl.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/uverbs_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/core/uverbs_main.c	2011-08-29 17:50:22.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/core/uverbs_main.c	2011-08-29 18:09:27.000000000 +0300
+@@ -44,6 +44,7 @@
+ #include <linux/mount.h>
+ #include <linux/cdev.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <asm/uaccess.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2.c	2011-08-29 18:09:27.000000000 +0300
+@@ -46,6 +46,7 @@
+ #include <linux/tcp.h>
+ #include <linux/init.h>
+ #include <linux/dma-mapping.h>
++#include <linux/slab.h>
+ 
+ #include <asm/io.h>
+ #include <asm/irq.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_alloc.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_alloc.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_alloc.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,7 +32,6 @@
+  */
+ 
+ #include <linux/errno.h>
+-#include <linux/slab.h>
+ #include <linux/bitmap.h>
+ 
+ #include "c2.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_cm.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  *
+  */
++#include <linux/slab.h>
++
+ #include "c2.h"
+ #include "c2_wr.h"
+ #include "c2_vq.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_cq.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,8 @@
+  * SOFTWARE.
+  *
+  */
++#include <linux/gfp.h>
++
+ #include "c2.h"
+ #include "c2_vq.h"
+ #include "c2_status.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_mm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_mm.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_mm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -30,6 +30,8 @@
+  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  * SOFTWARE.
+  */
++#include <linux/slab.h>
++
+ #include "c2.h"
+ #include "c2_vq.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_pd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_pd.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_pd.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+  */
+ 
+ #include <linux/init.h>
++#include <linux/slab.h>
+ #include <linux/errno.h>
+ 
+ #include "c2.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_provider.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_provider.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_provider.c	2011-08-29 18:09:27.000000000 +0300
+@@ -50,6 +50,7 @@
+ #include <linux/dma-mapping.h>
+ #include <linux/if_arp.h>
+ #include <linux/vmalloc.h>
++#include <linux/slab.h>
+ 
+ #include <asm/io.h>
+ #include <asm/irq.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_qp.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -36,6 +36,7 @@
+  */
+ 
+ #include <linux/delay.h>
++#include <linux/gfp.h>
+ 
+ #include "c2.h"
+ #include "c2_vq.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_rnic.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/amso1100/c2_rnic.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/amso1100/c2_rnic.c	2011-08-29 18:09:27.000000000 +0300
+@@ -51,6 +51,7 @@
+ #include <linux/mm.h>
+ #include <linux/inet.h>
+ #include <linux/vmalloc.h>
++#include <linux/slab.h>
+ 
+ #include <linux/route.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/cxio_dbg.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/cxio_dbg.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/cxio_dbg.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  */
+ #ifdef DEBUG
+ #include <linux/types.h>
++#include <linux/slab.h>
+ #include "common.h"
+ #include "cxgb3_ioctl.h"
+ #include "cxio_hal.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/cxio_hal.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/cxio_hal.c	2011-08-29 17:45:28.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/cxio_hal.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/spinlock.h>
+ #include <linux/pci.h>
+ #include <linux/dma-mapping.h>
++#include <linux/slab.h>
+ #include <net/net_namespace.h>
+ 
+ #include "cxio_resource.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/iwch_cm.c	2011-08-29 17:45:28.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  */
+ #include <linux/module.h>
+ #include <linux/list.h>
++#include <linux/slab.h>
+ #include <linux/workqueue.h>
+ #include <linux/skbuff.h>
+ #include <linux/timer.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_ev.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/iwch_ev.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_ev.c	2011-08-29 18:09:27.000000000 +0300
+@@ -29,7 +29,7 @@
+  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  * SOFTWARE.
+  */
+-#include <linux/slab.h>
++#include <linux/gfp.h>
+ #include <linux/mman.h>
+ #include <net/sock.h>
+ #include "iwch_provider.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_mem.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/iwch_mem.c	2011-08-29 17:45:21.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_mem.c	2011-08-29 18:09:27.000000000 +0300
+@@ -29,6 +29,7 @@
+  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  * SOFTWARE.
+  */
++#include <linux/slab.h>
+ #include <asm/byteorder.h>
+ 
+ #include <rdma/iw_cm.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_provider.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/iwch_provider.c	2011-08-29 17:45:23.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_provider.c	2011-08-29 18:09:27.000000000 +0300
+@@ -41,6 +41,7 @@
+ #include <linux/ethtool.h>
+ #include <linux/rtnetlink.h>
+ #include <linux/inetdevice.h>
++#include <linux/slab.h>
+ 
+ #include <asm/io.h>
+ #include <asm/irq.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/cxgb3/iwch_qp.c	2011-08-29 17:45:24.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/cxgb3/iwch_qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -29,6 +29,8 @@
+  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  * SOFTWARE.
+  */
++#include <linux/sched.h>
++#include <linux/gfp.h>
+ #include "iwch_provider.h"
+ #include "iwch.h"
+ #include "iwch_cm.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_av.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_av.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_av.c	2011-08-29 18:09:27.000000000 +0300
+@@ -41,6 +41,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_tools.h"
+ #include "ehca_iverbs.h"
+ #include "hcp_if.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_cq.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -43,6 +43,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_iverbs.h"
+ #include "ehca_classes.h"
+ #include "ehca_irq.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_hca.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_hca.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_hca.c	2011-08-29 18:09:27.000000000 +0300
+@@ -39,6 +39,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/gfp.h>
++
+ #include "ehca_tools.h"
+ #include "ehca_iverbs.h"
+ #include "hcp_if.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_irq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_irq.c	2011-08-29 17:44:55.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_irq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -41,6 +41,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_classes.h"
+ #include "ehca_irq.h"
+ #include "ehca_iverbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_mrmw.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_mrmw.c	2011-08-29 17:50:06.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_mrmw.c	2011-08-29 18:09:27.000000000 +0300
+@@ -40,6 +40,7 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
+ #include <rdma/ib_umem.h>
+ 
+ #include "ehca_iverbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_pd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_pd.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_pd.c	2011-08-29 18:09:27.000000000 +0300
+@@ -38,6 +38,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_tools.h"
+ #include "ehca_iverbs.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_qp.c	2011-08-29 17:50:03.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -43,6 +43,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_classes.h"
+ #include "ehca_tools.h"
+ #include "ehca_qes.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_uverbs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ehca_uverbs.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ehca_uverbs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -40,6 +40,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_classes.h"
+ #include "ehca_iverbs.h"
+ #include "ehca_mrmw.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ipz_pt_fn.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ehca/ipz_pt_fn.c	2011-08-29 17:44:51.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ehca/ipz_pt_fn.c	2011-08-29 18:09:27.000000000 +0300
+@@ -38,6 +38,8 @@
+  * POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ehca_tools.h"
+ #include "ipz_pt_fn.h"
+ #include "ehca_classes.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_cq.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ 
+ #include <linux/err.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_dma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_dma.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_dma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <linux/scatterlist.h>
++#include <linux/gfp.h>
+ #include <rdma/ib_verbs.h>
+ 
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_driver.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_driver.c	2011-08-29 17:45:00.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_driver.c	2011-08-29 18:09:27.000000000 +0300
+@@ -38,6 +38,8 @@
+ #include <linux/delay.h>
+ #include <linux/netdevice.h>
+ #include <linux/vmalloc.h>
++#include <linux/bitmap.h>
++#include <linux/slab.h>
+ 
+ #include "ipath_kernel.h"
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_file_ops.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_file_ops.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_file_ops.c	2011-08-29 18:09:27.000000000 +0300
+@@ -36,6 +36,7 @@
+ #include <linux/cdev.h>
+ #include <linux/swap.h>
+ #include <linux/vmalloc.h>
++#include <linux/slab.h>
+ #include <linux/highmem.h>
+ #include <linux/io.h>
+ #include <linux/jiffies.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_fs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_fs.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_fs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/pagemap.h>
+ #include <linux/init.h>
+ #include <linux/namei.h>
++#include <linux/slab.h>
+ 
+ #include "ipath_kernel.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_init_chip.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_init_chip.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_init_chip.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/pci.h>
+ #include <linux/netdevice.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "ipath_kernel.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_mmap.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_mmap.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_mmap.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+ 
+ #include <linux/module.h>
+ #include <linux/vmalloc.h>
++#include <linux/slab.h>
+ #include <linux/mm.h>
+ #include <linux/errno.h>
+ #include <asm/pgtable.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_mr.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_mr.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_mr.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include <rdma/ib_umem.h>
+ #include <rdma/ib_pack.h>
+ #include <rdma/ib_smi.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_qp.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,8 @@
+  */
+ 
+ #include <linux/err.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_sdma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_sdma.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_sdma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <linux/spinlock.h>
++#include <linux/gfp.h>
+ 
+ #include "ipath_kernel.h"
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_srq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_srq.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_srq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ 
+ #include <linux/err.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "ipath_verbs.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_user_pages.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_user_pages.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_user_pages.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,8 @@
+ 
+ #include <linux/mm.h>
+ #include <linux/device.h>
++#include <linux/slab.h>
++#include <linux/sched.h>
+ 
+ #include "ipath_kernel.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_verbs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_verbs.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_verbs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <rdma/ib_mad.h>
+ #include <rdma/ib_user_verbs.h>
+ #include <linux/io.h>
++#include <linux/slab.h>
+ #include <linux/utsname.h>
+ #include <linux/rculist.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_verbs_mcast.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/ipath/ipath_verbs_mcast.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/ipath/ipath_verbs_mcast.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,8 @@
+  */
+ 
+ #include <linux/rculist.h>
++#include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include "ipath_verbs.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/ah.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/ah.c	2011-08-29 17:47:07.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/ah.c	2011-08-29 18:09:27.000000000 +0300
+@@ -30,6 +30,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "mlx4_ib.h"
+ #include <rdma/ib_addr.h>
+ #include <linux/inet.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/cq.c	2011-08-29 17:47:50.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <linux/mlx4/cq.h>
+ #include <linux/mlx4/qp.h>
+ #include <linux/mlx4/srq.h>
++#include <linux/slab.h>
+ 
+ #include "mlx4_ib.h"
+ #include "user.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/mad.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/mad.c	2011-08-29 17:46:23.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/mad.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <rdma/ib_smi.h>
+ 
+ #include <linux/mlx4/cmd.h>
++#include <linux/gfp.h>
+ 
+ #include "mlx4_ib.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/main.c	2011-08-29 17:50:03.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/main.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/module.h>
+ #include <linux/init.h>
++#include <linux/slab.h>
+ #include <linux/errno.h>
+ #include <linux/netdevice.h>
+ #include <linux/inetdevice.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/mr.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/mr.c	2011-08-29 17:46:25.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/mr.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "mlx4_ib.h"
+ 
+ static u32 convert_access(int acc)
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/qp.c	2011-08-29 17:50:04.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/log2.h>
+ #include <linux/netdevice.h>
++#include <linux/slab.h>
+ 
+ #include <rdma/ib_cache.h>
+ #include <rdma/ib_pack.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/srq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mlx4/srq.c	2011-08-29 17:47:42.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mlx4/srq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/mlx4/qp.h>
+ #include <linux/mlx4/srq.h>
++#include <linux/slab.h>
+ 
+ #include "mlx4_ib.h"
+ #include "user.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_cmd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_cmd.c	2011-08-29 17:50:03.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_cmd.c	2011-08-29 18:09:27.000000000 +0300
+@@ -36,6 +36,7 @@
+ #include <linux/pci.h>
+ #include <linux/errno.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ #include <asm/io.h>
+ #include <rdma/ib_mad.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_cq.c	2011-08-29 17:47:51.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/gfp.h>
+ #include <linux/hardirq.h>
+ #include <linux/sched.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_eq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_eq.c	2011-08-29 17:47:53.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_eq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <linux/errno.h>
+ #include <linux/interrupt.h>
+ #include <linux/pci.h>
++#include <linux/slab.h>
+ 
+ #include "mthca_dev.h"
+ #include "mthca_cmd.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_main.c	2011-08-29 17:47:54.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_main.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/errno.h>
+ #include <linux/pci.h>
+ #include <linux/interrupt.h>
++#include <linux/gfp.h>
+ 
+ #include "mthca_dev.h"
+ #include "mthca_config_reg.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_mcg.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_mcg.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_mcg.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,7 +31,7 @@
+  */
+ 
+ #include <linux/string.h>
+-#include <linux/slab.h>
++#include <linux/gfp.h>
+ 
+ #include "mthca_dev.h"
+ #include "mthca_cmd.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_memfree.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_memfree.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_memfree.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ #include <linux/mm.h>
+ #include <linux/scatterlist.h>
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ 
+ #include <asm/page.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_provider.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/mthca/mthca_provider.c	2011-08-29 17:47:54.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/mthca/mthca_provider.c	2011-08-29 18:09:27.000000000 +0300
+@@ -39,6 +39,7 @@
+ #include <rdma/ib_user_verbs.h>
+ 
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ #include <linux/mm.h>
+ 
+ #include "mthca_dev.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes.c	2011-08-29 17:48:37.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes.c	2011-08-29 18:09:27.000000000 +0300
+@@ -44,6 +44,7 @@
+ #include <linux/init.h>
+ #include <linux/if_arp.h>
+ #include <linux/highmem.h>
++#include <linux/slab.h>
+ #include <asm/io.h>
+ #include <asm/irq.h>
+ #include <asm/byteorder.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes_cm.c	2011-08-29 17:48:36.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -53,6 +53,7 @@
+ #include <linux/list.h>
+ #include <linux/threads.h>
+ #include <linux/highmem.h>
++#include <linux/slab.h>
+ #include <net/arp.h>
+ #include <net/neighbour.h>
+ #include <net/route.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_hw.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes_hw.c	2011-08-29 17:48:43.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_hw.c	2011-08-29 18:09:27.000000000 +0300
+@@ -39,6 +39,7 @@
+ #include <linux/tcp.h>
+ #include <linux/if_vlan.h>
+ #include <linux/inet_lro.h>
++#include <linux/slab.h>
+ 
+ #include "nes.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_nic.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes_nic.c	2011-08-29 17:50:10.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_nic.c	2011-08-29 18:09:27.000000000 +0300
+@@ -40,6 +40,7 @@
+ #include <linux/if_arp.h>
+ #include <linux/if_vlan.h>
+ #include <linux/ethtool.h>
++#include <linux/slab.h>
+ #include <net/tcp.h>
+ 
+ #include <net/inet_common.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_utils.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes_utils.c	2011-08-29 17:48:26.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_utils.c	2011-08-29 18:09:27.000000000 +0300
+@@ -38,6 +38,7 @@
+ #include <linux/ethtool.h>
+ #include <linux/mii.h>
+ #include <linux/if_vlan.h>
++#include <linux/slab.h>
+ #include <linux/crc32.h>
+ #include <linux/in.h>
+ #include <linux/ip.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_verbs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/hw/nes/nes_verbs.c	2011-08-29 17:50:03.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/hw/nes/nes_verbs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ #include <linux/moduleparam.h>
+ #include <linux/random.h>
+ #include <linux/highmem.h>
++#include <linux/slab.h>
+ #include <asm/byteorder.h>
+ 
+ #include <rdma/ib_verbs.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2011-08-29 17:50:15.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -36,6 +36,7 @@
+ #include <net/icmp.h>
+ #include <linux/icmpv6.h>
+ #include <linux/delay.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "ipoib.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_fs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_fs.c	2011-08-29 17:44:27.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_fs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+ 
+ #include <linux/err.h>
+ #include <linux/seq_file.h>
++#include <linux/slab.h>
+ 
+ struct file_operations;
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_ib.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_ib.c	2011-08-29 17:45:14.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_ib.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/delay.h>
+ #include <linux/dma-mapping.h>
++#include <linux/slab.h>
+ 
+ #include <rdma/ib_cache.h>
+ #include <linux/ip.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_multicast.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_multicast.c	2011-08-29 17:50:15.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_multicast.c	2011-08-29 18:09:27.000000000 +0300
+@@ -40,6 +40,7 @@
+ #include <linux/inetdevice.h>
+ #include <linux/delay.h>
+ #include <linux/completion.h>
++#include <linux/slab.h>
+ 
+ #include <net/dst.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_verbs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_verbs.c	2011-08-29 17:45:00.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_verbs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "ipoib.h"
+ #include <linux/ethtool.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_vlan.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/ipoib/ipoib_vlan.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/ipoib/ipoib_vlan.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,7 +33,6 @@
+ #include <linux/module.h>
+ 
+ #include <linux/init.h>
+-#include <linux/slab.h>
+ #include <linux/seq_file.h>
+ 
+ #include <asm/uaccess.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/iser/iscsi_iser.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/iser/iscsi_iser.c	2011-08-29 18:09:27.000000000 +0300
+@@ -56,6 +56,7 @@
+ #include <linux/net.h>
+ #include <linux/scatterlist.h>
+ #include <linux/delay.h>
++#include <linux/slab.h>
+ 
+ #include <net/sock.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-29 17:41:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/kernel.h>
+ #include <linux/module.h>
++#include <linux/slab.h>
+ #include <linux/delay.h>
+ 
+ #include "iscsi_iser.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/cmd.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/cmd.c	2011-08-29 17:50:13.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/cmd.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+  */
+ 
+ #include <linux/sched.h>
++#include <linux/slab.h>
+ #include <linux/pci.h>
+ #include <linux/errno.h>
+ #include <linux/semaphore.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/cq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/cq.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/cq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -36,6 +36,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/hardirq.h>
++#include <linux/gfp.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ #include <linux/mlx4/cq.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/en_main.c	2011-08-29 17:47:43.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_main.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ #include <linux/module.h>
+ #include <linux/delay.h>
+ #include <linux/netdevice.h>
++#include <linux/slab.h>
+ 
+ #include <linux/mlx4/driver.h>
+ #include <linux/mlx4/device.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_netdev.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/en_netdev.c	2011-08-29 17:47:45.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_netdev.c	2011-08-29 18:10:19.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/delay.h>
+ #include <linux/cpufreq.h>
+ #include <linux/topology.h>
++#include <linux/slab.h>
+ 
+ #include <linux/mlx4/driver.h>
+ #include <linux/mlx4/device.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_resources.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/en_resources.c	2011-08-29 17:47:41.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_resources.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ 
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ #include <linux/mlx4/qp.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_rx.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/en_rx.c	2011-08-29 17:50:12.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_rx.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ 
+ #include <linux/mlx4/cq.h>
++#include <linux/slab.h>
+ #include <linux/mlx4/qp.h>
+ #include <linux/skbuff.h>
+ #include <linux/if_ether.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_tx.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/en_tx.c	2011-08-29 17:47:42.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/en_tx.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <asm/page.h>
+ #include <linux/mlx4/cq.h>
++#include <linux/slab.h>
+ #include <linux/mlx4/qp.h>
+ #include <linux/skbuff.h>
+ #include <linux/if_vlan.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/eq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/eq.c	2011-08-29 17:47:36.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/eq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/interrupt.h>
++#include <linux/slab.h>
+ #include <linux/mm.h>
+ #include <linux/dma-mapping.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/icm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/icm.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/icm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ #include <linux/errno.h>
+ #include <linux/mm.h>
+ #include <linux/scatterlist.h>
++#include <linux/slab.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/intf.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/intf.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/intf.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/slab.h>
++
+ #include "mlx4.h"
+ 
+ struct mlx4_device_context {
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/main.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/main.c	2011-08-29 17:47:40.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/main.c	2011-08-29 18:09:27.000000000 +0300
+@@ -39,6 +39,7 @@
+ #include <linux/pci.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/io-mapping.h>
++#include <linux/slab.h>
+ 
+ #include <linux/mlx4/device.h>
+ #include <linux/mlx4/doorbell.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/mcg.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/mcg.c	2011-08-29 17:47:22.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/mcg.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,7 +33,6 @@
+ 
+ #include <linux/init.h>
+ #include <linux/string.h>
+-#include <linux/slab.h>
+ #include <linux/etherdevice.h>
+ 
+ #include <linux/mlx4/cmd.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/mr.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/mr.c	2011-08-29 17:50:12.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/mr.c	2011-08-29 18:11:08.000000000 +0300
+@@ -35,6 +35,7 @@
+ #include <linux/init.h>
+ #include <linux/errno.h>
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/profile.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/profile.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/profile.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,8 @@
+ 
+ #include <linux/init.h>
+ 
++#include <linux/slab.h>
++
+ #include "mlx4.h"
+ #include "fw.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/qp.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/qp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -35,6 +35,7 @@
+ 
+ #include <linux/init.h>
+ 
++#include <linux/gfp.h>
+ #include <linux/mlx4/cmd.h>
+ #include <linux/mlx4/qp.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/srq.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/drivers/net/mlx4/srq.c	2011-08-29 17:47:33.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/drivers/net/mlx4/srq.c	2011-08-29 18:09:27.000000000 +0300
+@@ -34,6 +34,7 @@
+ #include <linux/init.h>
+ 
+ #include <linux/mlx4/cmd.h>
++#include <linux/gfp.h>
+ 
+ #include "mlx4.h"
+ #include "icm.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/af_rds.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/af_rds.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/af_rds.c	2011-08-29 18:09:27.000000000 +0300
+@@ -33,6 +33,7 @@
+ #include <linux/module.h>
+ #include <linux/errno.h>
+ #include <linux/kernel.h>
++#include <linux/gfp.h>
+ #include <linux/in.h>
+ #include <linux/poll.h>
+ #include <linux/version.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/cong.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/cong.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/cong.c	2011-08-29 18:09:27.000000000 +0300
+@@ -30,6 +30,7 @@
+  * SOFTWARE.
+  *
+  */
++#include <linux/slab.h>
+ #include <linux/types.h>
+ #include <linux/rbtree.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/connection.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/connection.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/connection.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/kernel.h>
+ #include <linux/list.h>
++#include <linux/slab.h>
+ #include <net/inet_hashtables.h>
+ 
+ #include "rds.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/ib.c	2011-08-29 17:44:08.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/inetdevice.h>
+ #include <linux/if_arp.h>
+ #include <linux/delay.h>
++#include <linux/slab.h>
+ 
+ #include "rds.h"
+ #include "ib.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/ib_cm.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/kernel.h>
+ #include <linux/in.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "rds.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_rdma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/ib_rdma.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_rdma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ 
+ #include "rds.h"
+ #include "rdma.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_recv.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/ib_recv.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/ib_recv.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <linux/pci.h>
+ #include <linux/dma-mapping.h>
+ #include <rdma/rdma_cm.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/info.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/info.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/info.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/percpu.h>
+ #include <linux/seq_file.h>
++#include <linux/slab.h>
+ #include <linux/proc_fs.h>
+ 
+ #include "rds.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/iw.c	2011-08-29 17:44:08.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw.c	2011-08-29 18:09:27.000000000 +0300
+@@ -37,6 +37,7 @@
+ #include <linux/inetdevice.h>
+ #include <linux/if_arp.h>
+ #include <linux/delay.h>
++#include <linux/slab.h>
+ 
+ #include "rds.h"
+ #include "iw.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_cm.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/iw_cm.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_cm.c	2011-08-29 18:09:27.000000000 +0300
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/kernel.h>
+ #include <linux/in.h>
++#include <linux/slab.h>
+ #include <linux/vmalloc.h>
+ 
+ #include "rds.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_rdma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/iw_rdma.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_rdma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ 
+ #include "rds.h"
+ #include "rdma.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_recv.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/iw_recv.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/iw_recv.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <linux/pci.h>
+ #include <linux/dma-mapping.h>
+ #include <rdma/rdma_cm.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/loop.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/loop.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/loop.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <linux/in.h>
+ 
+ #include "rds.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/message.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/message.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/message.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ 
+ #include "rds.h"
+ #include "rdma.h"
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/page.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/page.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/page.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/highmem.h>
++#include <linux/gfp.h>
+ 
+ #include "rds.h"
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/rdma.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/rdma.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/rdma.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/pagemap.h>
++#include <linux/slab.h>
+ #include <linux/rbtree.h>
+ #include <linux/dma-mapping.h> /* for DMA_*_DEVICE */
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/recv.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/recv.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/recv.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <net/sock.h>
+ #include <linux/in.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/send.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/send.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/send.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/gfp.h>
+ #include <net/sock.h>
+ #include <linux/in.h>
+ #include <linux/list.h>
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/tcp.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <linux/in.h>
+ #include <net/tcp.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp_listen.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/tcp_listen.c	2011-08-29 17:50:16.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp_listen.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/gfp.h>
+ #include <linux/in.h>
+ #include <net/tcp.h>
+ 
+Index: ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp_recv.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check.orig/net/rds/tcp_recv.c	2011-08-29 17:41:59.000000000 +0300
++++ ofa_1_5_dev_kernel-20110829-1741_linux-2.6.34_check/net/rds/tcp_recv.c	2011-08-29 18:09:27.000000000 +0300
+@@ -31,6 +31,7 @@
+  *
+  */
+ #include <linux/kernel.h>
++#include <linux/slab.h>
+ #include <net/tcp.h>
+ 
+ #include "rds.h"

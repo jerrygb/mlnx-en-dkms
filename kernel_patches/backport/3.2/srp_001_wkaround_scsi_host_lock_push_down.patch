@@ -1,0 +1,34 @@
+srp: temporary workaround scsi host lock push down
+
+. Temporary workaround scsi host lock push down in new implementation of scsi stack
+  in kernel 3.x
+. The right approach is backport linux-3.3's ib_srp to take advantage of
+  unlocked queuecommand
+. Address SF case 59843 
+
+Signed-off-by: Vu Pham <vu@mellanox.com>
+
+---
+
+--- a/drivers/infiniband/ulp/srp/ib_srp.c
++++ b/drivers/infiniband/ulp/srp/ib_srp.c
+@@ -1078,8 +1078,8 @@ static int __srp_post_send(struct srp_ta
+ 	return ret;
+ }
+ 
+-static int srp_queuecommand(struct scsi_cmnd *scmnd,
+-			    void (*done)(struct scsi_cmnd *))
++static int srp_queuecommand_lck(struct scsi_cmnd *scmnd,
++				void (*done)(struct scsi_cmnd *))
+ {
+ 	struct srp_target_port *target = host_to_target(scmnd->device->host);
+ 	struct srp_request *req;
+@@ -1161,6 +1161,8 @@ err:
+ 	return SCSI_MLQUEUE_HOST_BUSY;
+ }
+ 
++DEF_SCSI_QCMD(srp_queuecommand)
++
+ static int srp_alloc_iu_bufs(struct srp_target_port *target)
+ {
+ 	int i;

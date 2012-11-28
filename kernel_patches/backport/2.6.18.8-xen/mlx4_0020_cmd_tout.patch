@@ -1,0 +1,35 @@
+When the system is busy it may happen that the command actually
+completed but it took more than the specified timeout till the
+task executing the command was actually given CPU time. This test
+checks that the completion is really missing before failing.
+
+Signed-off-by: Eli Cohen <eli@mellanox.co.il>
+Signed-off-by: Dotan Barak <dotanb@dev.mellanox.co.il>
+
+---
+
+ drivers/net/mlx4/cmd.c |   11 ++++++-----
+ 1 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/mlx4/cmd.c b/drivers/net/mlx4/cmd.c
+index d5541d9..b8b4732 100644
+--- a/drivers/net/mlx4/cmd.c
++++ b/drivers/net/mlx4/cmd.c
+@@ -426,11 +426,12 @@ static int mlx4_cmd_wait(struct mlx4_dev *dev, u64 in_param, u64 *out_param,
+ 	mlx4_cmd_post(dev, in_param, out_param ? *out_param : 0,
+ 		      in_modifier, op_modifier, op, context->token, 1);
+ 
+-	if (!wait_for_completion_timeout(&context->done, msecs_to_jiffies(timeout))) {
+-		mlx4_warn(dev, "command 0x%x timed out (go bit not cleared)\n", op);
+-		err = -EBUSY;
+-		goto out;
+-	}
++	if (!wait_for_completion_timeout(&context->done, msecs_to_jiffies(timeout)))
++		if (!context->done.done) {
++			mlx4_warn(dev, "command 0x%x timed out (go bit not cleared)\n", op);
++			err = -EBUSY;
++			goto out;
++		}
+ 
+ 	err = context->result;
+ 	if (err) {

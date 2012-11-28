@@ -1,0 +1,75 @@
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 4b0b1ad..9cc4fe8 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -664,6 +664,12 @@ static void mlx4_en_do_get_stats(struct work_struct *work)
+ 		en_dbg(HW, priv, "Could not update stats \n");
+ 
+ 
++	if (++priv->query_freq == QUERY_FREQ) {
++		if (mlx4_en_QUERY_PORT(mdev, priv->port))
++			en_dbg(HW, priv, "Could not query port state\n");
++		priv->query_freq = 0;
++	}
++
+ 	mutex_lock(&mdev->state_lock);
+ 	if (mdev->device_up) {
+ 		if (priv->port_up) {
+@@ -1200,6 +1206,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	priv->msg_enable = MLX4_EN_MSG_LEVEL;
+ 	spin_lock_init(&priv->stats_lock);
+ 	spin_lock_init(&priv->vlan_lock);
++	spin_lock_init(&priv->port_lock);
+ 	INIT_WORK(&priv->mcast_task, mlx4_en_do_set_multicast);
+ 	INIT_WORK(&priv->mac_task, mlx4_en_do_set_mac);
+ 	INIT_WORK(&priv->watchdog_task, mlx4_en_restart);
+diff --git a/drivers/net/mlx4/en_port.c b/drivers/net/mlx4/en_port.c
+index e6ab33c..a557a92 100644
+--- a/drivers/net/mlx4/en_port.c
++++ b/drivers/net/mlx4/en_port.c
+@@ -58,8 +58,7 @@ int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port)
+ 		goto out;
+ 	qport_context = mailbox->buf;
+ 
+-	/* This command is always accessed from Ethtool context
+-	 * already synchronized, no need in locking */
++	spin_lock(&priv->port_lock);
+ 	state->link_state = !!(qport_context->link_up & MLX4_EN_LINK_UP_MASK);
+ 	if (qport_context->link_speed != 0xff) {
+ 		if ((qport_context->link_speed & MLX4_EN_SPEED_MASK) ==
+@@ -70,6 +69,7 @@ int mlx4_en_QUERY_PORT(struct mlx4_en_dev *mdev, u8 port)
+ 	} else
+ 		state->link_speed = qport_context->actual_speed * 100;
+ 	state->transciver = qport_context->transceiver;
++    spin_unlock(&priv->port_lock);
+ 
+ out:
+ 	mlx4_free_cmd_mailbox(mdev->dev, mailbox);
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 0bf3145..8ff0b21 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -104,6 +104,7 @@
+ #define STAMP_SHIFT		31
+ #define STAMP_VAL		0x7fffffff
+ #define STATS_DELAY		(HZ / 4)
++#define QUERY_FREQ		(HZ / STATS_DELAY)
+ 
+ /* Typical TSO descriptor with 16 gather entries is 352 bytes... */
+ #define MAX_DESC_SIZE		512
+@@ -537,6 +538,7 @@ struct mlx4_en_priv {
+ 	struct net_device_stats ret_stats;
+ 	struct mlx4_en_port_state port_state;
+ 	spinlock_t stats_lock;
++	spinlock_t port_lock;
+ 
+ 	unsigned long last_moder_packets[MAX_RX_RINGS];
+ 	unsigned long last_moder_tx_packets;
+@@ -583,6 +585,7 @@ struct mlx4_en_priv {
+ 	struct mlx4_en_frag_info frag_info[MLX4_EN_MAX_RX_FRAGS];
+ 	u16 num_frags;
+ 	u16 log_rx_info;
++	u8  query_freq;
+ 
+ 	struct mlx4_en_tx_ring tx_ring[MAX_TX_RINGS];
+ 	int tx_vector;

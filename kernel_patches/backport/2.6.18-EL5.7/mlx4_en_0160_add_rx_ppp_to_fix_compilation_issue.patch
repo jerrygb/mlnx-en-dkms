@@ -1,0 +1,38 @@
+From f1d34de31827cb98159851c4ee083c05f9a2976a Mon Sep 17 00:00:00 2001
+From: Sharon Cohen <sharonc@mellanox.co.il>
+Date: Tue, 6 Sep 2011 12:42:49 +0300
+Subject: [PATCH] mlx4_en: add rx_ppp to fix compilation issue at backport mlx4_en_0150_tx_queue_kernel_selection.patch
+
+Signed-off-by: Sharon Cohen <sharonc@mellanox.co.il>
+---
+ drivers/net/mlx4/en_main.c |    1 +
+ drivers/net/mlx4/mlx4_en.h |    1 +
+ 2 files changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_main.c b/drivers/net/mlx4/en_main.c
+index a7d1517..ef2a781 100644
+--- a/drivers/net/mlx4/en_main.c
++++ b/drivers/net/mlx4/en_main.c
+@@ -112,6 +112,7 @@ static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
+ 		params->prof[i].rx_ring_size = MLX4_EN_DEF_RX_RING_SIZE;
+ 		params->prof[i].tx_ring_num = MLX4_EN_NUM_HASH_RINGS +
+ 			(!!pfcrx) * MLX4_EN_NUM_PPP_RINGS;
++		params->prof[i].rx_ppp = pfcrx;
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 16d8087..7456825 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -398,6 +398,7 @@ struct mlx4_en_port_profile {
+ 	u32 rx_ring_size;
+ 	u8 rx_pause;
+ 	u8 tx_pause;
++	u8 rx_ppp;
+ };
+ 
+ struct mlx4_en_profile {
+-- 
+1.5.4.3
+

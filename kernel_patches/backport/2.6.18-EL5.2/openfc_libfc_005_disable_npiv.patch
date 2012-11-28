@@ -1,0 +1,129 @@
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_exch.c ofa_kernel-1.5.1/drivers/scsi/libfc/fc_exch.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_exch.c	2010-06-25 09:41:08.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/fc_exch.c	2010-06-24 15:10:31.000000000 -0700
+@@ -26,6 +26,7 @@
+ #include <linux/timer.h>
+ #include <linux/slab.h>
+ #include <linux/err.h>
++#include <linux/mempool.h>
+ 
+ #include <scsi/fc/fc_fc2.h>
+ 
+@@ -1236,7 +1236,9 @@
+ static void fc_exch_recv_req(struct fc_lport *lport, struct fc_exch_mgr *mp,
+ 			     struct fc_frame *fp)
+ {
++#if 0
+ 	struct fc_frame_header *fh = fc_frame_header_get(fp);
++#endif
+ 	struct fc_seq *sp = NULL;
+ 	struct fc_exch *ep = NULL;
+ 	enum fc_pf_rjt_reason reject;
+@@ -1243,7 +1244,7 @@
+ 	struct fc_seq *sp = NULL;
+ 	struct fc_exch *ep = NULL;
+ 	enum fc_pf_rjt_reason reject;
+-
++#if 0
+ 	/* We can have the wrong fc_lport at this point with NPIV, which is a
+ 	 * problem now that we know a new exchange needs to be allocated
+ 	 */
+@@ -1252,7 +1253,7 @@
+ 		fc_frame_free(fp);
+ 		return;
+ 	}
+-
++#endif
+ 	fr_seq(fp) = NULL;
+ 	reject = fc_seq_lookup_recip(lport, mp, fp);
+ 	if (reject == FC_RJT_NONE) {
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_fcp.c ofa_kernel-1.5.1/drivers/scsi/libfc/fc_fcp.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_fcp.c	2010-06-25 09:41:01.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/fc_fcp.c	2010-06-24 14:35:56.000000000 -0700
+@@ -28,6 +28,7 @@
+ #include <linux/err.h>
+ #include <linux/crc32.h>
+ #include <linux/slab.h>
++#include <asm/kmap_types.h>
+ 
+ #include <scsi/scsi_tcq.h>
+ #include <scsi/scsi.h>
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_libfc.c ofa_kernel-1.5.1/drivers/scsi/libfc/fc_libfc.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_libfc.c	2010-06-25 09:38:34.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/fc_libfc.c	2010-06-24 14:19:23.000000000 -0700
+@@ -21,6 +21,7 @@
+ #include <linux/types.h>
+ #include <linux/scatterlist.h>
+ #include <linux/crc32.h>
++#include <asm/kmap_types.h>
+ 
+ #include <scsi/libfc.h>
+ 
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_lport.c ofa_kernel-1.5.1/drivers/scsi/libfc/fc_lport.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/libfc/fc_lport.c	2010-06-25 09:40:55.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/fc_lport.c	2010-06-24 15:11:46.000000000 -0700
+@@ -721,9 +721,12 @@
+ 		     fc_lport_state(lport));
+ 
+ 	fc_lport_state_enter(lport, LPORT_ST_READY);
++
++#if 0
+ 	if (lport->vport)
+ 		fc_vport_set_state(lport->vport, FC_VPORT_ACTIVE);
+ 	fc_vports_linkchange(lport);
++#endif
+ 
+ 	if (!lport->ptp_rdata)
+ 		lport->tt.disc_start(fc_lport_disc_callback, lport);
+@@ -972,15 +975,19 @@
+ 
+ 	if (lport->state == LPORT_ST_DISABLED || lport->state == LPORT_ST_LOGO)
+ 		return;
+-
++#if 0
+ 	if (lport->vport) {
+ 		if (lport->link_up)
+ 			fc_vport_set_state(lport->vport, FC_VPORT_INITIALIZING);
+ 		else
+ 			fc_vport_set_state(lport->vport, FC_VPORT_LINKDOWN);
+ 	}
++#endif
++
+ 	fc_lport_state_enter(lport, LPORT_ST_RESET);
++#if 0
+ 	fc_vports_linkchange(lport);
++#endif
+ 	fc_lport_reset_locked(lport);
+ 	if (lport->link_up)
+ 		fc_lport_enter_flogi(lport);
+@@ -999,7 +1006,9 @@
+ 		     fc_lport_state(lport));
+ 
+ 	fc_lport_state_enter(lport, LPORT_ST_DISABLED);
++#if 0
+ 	fc_vports_linkchange(lport);
++#endif
+ 	fc_lport_reset_locked(lport);
+ }
+ 
+@@ -1412,7 +1421,9 @@
+ 		     fc_lport_state(lport));
+ 
+ 	fc_lport_state_enter(lport, LPORT_ST_LOGO);
++#if 0
+ 	fc_vports_linkchange(lport);
++#endif
+ 
+ 	fp = fc_frame_alloc(lport, sizeof(*logo));
+ 	if (!fp) {
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/libfc/Makefile ofa_kernel-1.5.1/drivers/scsi/libfc/Makefile
+--- ofa_kernel-1.5.1.configured/drivers/scsi/libfc/Makefile	2010-06-24 13:48:12.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/libfc/Makefile	2010-06-24 14:43:22.000000000 -0700
+@@ -10,5 +10,5 @@
+ 	fc_frame.o \
+ 	fc_lport.o \
+ 	fc_rport.o \
+-	fc_fcp.o \
+-	fc_npiv.o
++	fc_fcp.o
++	#fc_npiv.o

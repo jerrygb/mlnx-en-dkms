@@ -1,0 +1,104 @@
+diff -rup old/drivers/net/cxgb3/common.h new/drivers/net/cxgb3/common.h
+--- old/drivers/net/cxgb3/common.h	2011-01-31 12:19:37.000000000 -0600
++++ new/drivers/net/cxgb3/common.h	2011-01-31 12:20:05.000000000 -0600
+@@ -81,18 +81,6 @@ static inline void init_rx_mode(struct t
+ 	p->idx = 0;
+ }
+ 
+-static inline u8 *t3_get_next_mcaddr(struct t3_rx_mode *rm)
+-{
+-	u8 *addr = NULL;
+-
+-	if (rm->mclist && rm->idx < rm->dev->mc_count) {
+-		addr = rm->mclist->dmi_addr;
+-		rm->mclist = rm->mclist->next;
+-		rm->idx++;
+-	}
+-	return addr;
+-}
+-
+ enum {
+ 	MAX_NPORTS = 2,		/* max # of ports */
+ 	MAX_FRAME_SIZE = 10240,	/* max MAC frame size, including header + FCS */
+@@ -755,7 +743,7 @@ void t3_mac_enable_exact_filters(struct cmac *mac);
+ int t3_mac_enable(struct cmac *mac, int which);
+ int t3_mac_disable(struct cmac *mac, int which);
+ int t3_mac_set_mtu(struct cmac *mac, unsigned int mtu);
+-int t3_mac_set_rx_mode(struct cmac *mac, struct t3_rx_mode *rm);
++int t3_mac_set_rx_mode(struct cmac *mac, struct net_device *dev);
+ int t3_mac_set_address(struct cmac *mac, unsigned int idx, u8 addr[6]);
+ int t3_mac_set_num_ucast(struct cmac *mac, int n);
+ const struct mac_stats *t3_mac_update_stats(struct cmac *mac);
+diff -rup old/drivers/net/cxgb3/cxgb3_main.c new/drivers/net/cxgb3/cxgb3_main.c
+--- old/drivers/net/cxgb3/cxgb3_main.c	2011-01-31 12:19:38.000000000 -0600
++++ new/drivers/net/cxgb3/cxgb3_main.c	2011-01-31 12:20:05.000000000 -0600
+@@ -325,11 +325,9 @@ void t3_os_phymod_changed(struct adapter
+ 
+ static void cxgb_set_rxmode(struct net_device *dev)
+ {
+-	struct t3_rx_mode rm;
+ 	struct port_info *pi = netdev_priv(dev);
+ 
+-	init_rx_mode(&rm, dev, dev->mc_list);
+-	t3_mac_set_rx_mode(&pi->mac, &rm);
++	t3_mac_set_rx_mode(&pi->mac, dev);
+ }
+ 
+ /**
+@@ -340,15 +338,13 @@ static void cxgb_set_rxmode(struct net_d
+  */
+ static void link_start(struct net_device *dev)
+ {
+-	struct t3_rx_mode rm;
+ 	struct port_info *pi = netdev_priv(dev);
+ 	struct cmac *mac = &pi->mac;
+ 
+-	init_rx_mode(&rm, dev, dev->mc_list);
+ 	t3_mac_reset(mac);
+ 	t3_mac_set_mtu(mac, dev->mtu);
+ 	t3_mac_set_address(mac, 0, dev->dev_addr);
+-	t3_mac_set_rx_mode(mac, &rm);
++	t3_mac_set_rx_mode(mac, dev);
+ 	t3_link_start(&pi->phy, mac, &pi->link_config);
+ 	t3_mac_enable(mac, MAC_DIRECTION_RX | MAC_DIRECTION_TX);
+ }
+diff -rup old/drivers/net/cxgb3/xgmac.c new/drivers/net/cxgb3/xgmac.c
+--- old/drivers/net/cxgb3/xgmac.c	2011-01-31 12:19:37.000000000 -0600
++++ new/drivers/net/cxgb3/xgmac.c	2011-01-31 12:20:05.000000000 -0600
+@@ -297,29 +297,29 @@ static int hash_hw_addr(const u8 * addr)
+ 	return hash;
+ }
+ 
+-int t3_mac_set_rx_mode(struct cmac *mac, struct t3_rx_mode *rm)
++int t3_mac_set_rx_mode(struct cmac *mac, struct net_device *dev)
+ {
+ 	u32 val, hash_lo, hash_hi;
+ 	struct adapter *adap = mac->adapter;
+ 	unsigned int oft = mac->offset;
+ 
+ 	val = t3_read_reg(adap, A_XGM_RX_CFG + oft) & ~F_COPYALLFRAMES;
+-	if (rm->dev->flags & IFF_PROMISC)
++	if (dev->flags & IFF_PROMISC)
+ 		val |= F_COPYALLFRAMES;
+ 	t3_write_reg(adap, A_XGM_RX_CFG + oft, val);
+ 
+-	if (rm->dev->flags & IFF_ALLMULTI)
++	if (dev->flags & IFF_ALLMULTI)
+ 		hash_lo = hash_hi = 0xffffffff;
+ 	else {
+-		u8 *addr;
++		struct netdev_hw_addr *ha;
+ 		int exact_addr_idx = mac->nucast;
+ 
+ 		hash_lo = hash_hi = 0;
+-		while ((addr = t3_get_next_mcaddr(rm)))
++		netdev_for_each_mc_addr(ha, dev)
+ 			if (exact_addr_idx < EXACT_ADDR_FILTERS)
+-				set_addr_filter(mac, exact_addr_idx++, addr);
++				set_addr_filter(mac, exact_addr_idx++, ha->addr);
+ 			else {
+-				int hash = hash_hw_addr(addr);
++				int hash = hash_hw_addr(ha->addr);
+ 
+ 				if (hash < 32)
+ 					hash_lo |= (1 << hash);

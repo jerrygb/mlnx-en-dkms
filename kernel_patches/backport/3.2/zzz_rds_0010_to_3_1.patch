@@ -1,0 +1,51 @@
+From ece677be6b93ab0fa61eebe752844ca2b512dd9d Mon Sep 17 00:00:00 2001
+From: Vladimir Sokolovsky <vlad@mellanox.co.il>
+Date: Mon, 2 Jan 2012 12:29:02 +0200
+Subject: [PATCH] rds: add 3.1 support
+
+Signed-off-by: Vladimir Sokolovsky <vlad@mellanox.co.il>
+---
+ net/rds/ib.h   |    1 +
+ net/rds/iw.h   |    1 +
+ net/rds/page.c |    1 +
+ 3 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/net/rds/ib.h b/net/rds/ib.h
+index 79ce296..8e7dfb7 100644
+--- a/net/rds/ib.h
++++ b/net/rds/ib.h
+@@ -3,6 +3,7 @@
+ 
+ #include <rdma/ib_verbs.h>
+ #include <rdma/rdma_cm.h>
++#include <linux/interrupt.h>
+ #include "rds.h"
+ #include "rdma_transport.h"
+ 
+diff --git a/net/rds/iw.h b/net/rds/iw.h
+index 81915a5..418ece4 100644
+--- a/net/rds/iw.h
++++ b/net/rds/iw.h
+@@ -3,6 +3,7 @@
+ 
+ #include <rdma/ib_verbs.h>
+ #include <rdma/rdma_cm.h>
++#include <linux/interrupt.h>
+ #include "rds.h"
+ #include "rdma_transport.h"
+ 
+diff --git a/net/rds/page.c b/net/rds/page.c
+index 7a879cd..6ce8180 100644
+--- a/net/rds/page.c
++++ b/net/rds/page.c
+@@ -32,6 +32,7 @@
+  */
+ #include <linux/highmem.h>
+ #include <linux/gfp.h>
++#include <linux/cpu.h>
+ 
+ #include "rds.h"
+ 
+-- 
+1.5.4.3
+

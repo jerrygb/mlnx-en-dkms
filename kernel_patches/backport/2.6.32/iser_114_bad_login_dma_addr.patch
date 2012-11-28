@@ -1,0 +1,68 @@
+ib/iser: reject dma addresses which looks wrong
+
+On Citrix XenServer Host 5.6.100-39215p kernel 2.6.32.12-0.7.1.xs5.6.100.307.170586xen,
+dom0 (sizeof(long)) is 32bit dma_addr_t is 64bit, I noted that when the dma address
+returned by dma_map_single for the login request/response, is "too short" in the
+sense that it doesn't have MSBits set >= bit 32, we get data corruption during
+the login exchange. Moreover, when this happens, also the low 32 looks wrong as 
+they are totally not correlated to the kvirt address.
+
+If the login req dma mapping is as described above, the target reports on 
+corrupted  login request, and the other way around, if the login resp 
+dma mapping is such, the initiator reports on corrupted login response.
+
+Here is an example to "good" and "bad" mappings
+
+1st example, kvirt addr 0xf54d8000 of 8192 bytes was dma mapped to 0x1f56d8000 
+and kvirt addr 0xf54da000  of 8268 bytes dma mapped to 0x1f56da000
+
+iser_create_ib_conn_res: login buf f54d8000 size 16460 kvirt/dma - req f54d8000/1f56d8000 resp f54da000/1f56da000
+
+2nd example, kvirt addr 0xef678000 of 8192 bytes was dma mapped to 0x1fb478000
+and kvirt addr 0xef67a000 of 8268 bytes dma mapped to 0x6a51000 - which matches
+the "too short" criteria, 0x6a51000 is "too short" (msbit set is 26) and doesn't 
+match the low-order bits of 0xef67a000
+
+iser_create_ib_conn_res: login buf ef678000 size 16460 kvirt/dma - req ef678000/1fb478000 resp ef67a000/6a51000 
+
+With this patch, the iser driver returns error on the login attempt.
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iser_verbs.c |   12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-07 05:18:57.000000000 -0400
++++ ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c	2011-08-07 05:20:07.000000000 -0400
+@@ -154,7 +154,7 @@ static int iser_create_ib_conn_res(struc
+ {
+ 	struct iser_device	*device;
+ 	struct ib_qp_init_attr	init_attr;
+-	int			req_err, resp_err, ret = -ENOMEM;
++	int			req_err, resp_err, bad_req, bad_resp, ret = -ENOMEM;
+ 	struct ib_fmr_pool_param params;
+ 
+ 	BUG_ON(ib_conn->device == NULL);
+@@ -180,12 +180,16 @@ static int iser_create_ib_conn_res(struc
+ 	req_err  = ib_dma_mapping_error(device->ib_device, ib_conn->login_req_dma);
+ 	resp_err = ib_dma_mapping_error(device->ib_device, ib_conn->login_resp_dma);
+ 
+-	iser_err("login buf %p size %d kvirt/dma - req %p/%llx resp %p/%llx dma err %d/%d\n",
++	bad_req  = (ib_conn->login_req_dma  & 0xfffffffff00000000)? 0 : 1 ;
++	bad_resp = (ib_conn->login_resp_dma & 0xfffffffff00000000)? 0 : 1 ;
++
++	iser_err("login buf %p size %d kvirt/dma - req %p/%llx resp %p/%llx dma err %d/%d bad %d/%d\n",
+ 		ib_conn->login_buf, ISCSI_DEF_MAX_RECV_SEG_LEN+ISER_RX_LOGIN_SIZE,
+ 		ib_conn->login_req_buf, ib_conn->login_req_dma,
+-		ib_conn->login_resp_buf, ib_conn->login_resp_dma, req_err, resp_err);
++		ib_conn->login_resp_buf, ib_conn->login_resp_dma, req_err, resp_err,
++		bad_req, bad_resp);
+ 
+-	if (req_err || resp_err) {
++	if (req_err || resp_err || bad_req || bad_resp) {
+ 		if (req_err)
+ 			 ib_conn->login_req_dma = 0;
+ 		if (resp_err)

@@ -1,0 +1,36 @@
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index 31b8c6f..a358d21 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -596,8 +596,10 @@ static int mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
+ 	int tx_ind = 0;
+ 	struct tcphdr *th = tcp_hdr(skb);
+ 	struct iphdr *iph = ip_hdr(skb);
++	struct ipv6hdr *ip6h = ipv6_hdr(skb);
+ 	struct mlx4_en_tx_hash_entry *entry;
+ 	u32 hash_index;
++	u8 protocol;
+ 
+ 	/* Obtain VLAN information if present */
+ 	if (priv->prof->rx_ppp && vlan_tx_tag_present(skb)) {
+@@ -606,12 +608,18 @@ static int mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
+ 	}
+ 
+ 	/* Hashing is only done for TCP/IP or UDP/IP packets */
+-	if (be16_to_cpu(skb->protocol) != ETH_P_IP)
++	if (be16_to_cpu(skb->protocol) == ETH_P_IP) {
++		protocol = iph->protocol;
++		hash_index = be32_to_cpu(iph->daddr) & MLX4_EN_TX_HASH_MASK;
++	} else if (be16_to_cpu(skb->protocol) == ETH_P_IPV6) {
++		protocol = ip6h->nexthdr;
++		hash_index = be32_to_cpu(ip6h->daddr.in6_u.u6_addr32[3]) & MLX4_EN_TX_HASH_MASK;
++	} else
+ 		return MLX4_EN_NUM_HASH_RINGS-1;
+ 
+ 	hash_index = be32_to_cpu(iph->daddr) & MLX4_EN_TX_HASH_MASK;
+ 
+-	switch (iph->protocol) {
++	switch (protocol) {
+ 	case IPPROTO_UDP:
+ 		break;
+ 	case IPPROTO_TCP:

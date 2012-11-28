@@ -1,0 +1,11 @@
+--- ofa_kernel-1.5.3/drivers/infiniband/hw/nes/nes_cm.c	2011-01-13 08:13:21.000000000 +0100
++++ ofa_kernel-1.5.3-35/drivers/infiniband/hw/nes/nes_cm.c	2011-01-13 04:28:03.000000000 +0100
+@@ -1151,7 +1151,7 @@
+ 	}
+ 
+ 	if ((neigh == NULL) || (!(neigh->nud_state & NUD_VALID)))
+-		neigh_event_send(rt->u.dst.neighbour, NULL);
++		neigh_event_send(rt->dst.neighbour, NULL);
+ 
+ 	ip_rt_put(rt);
+ 	return rc;

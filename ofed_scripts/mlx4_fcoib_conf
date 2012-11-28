@@ -1,0 +1,287 @@
+#!/bin/bash
+#
+# mlx4_fcoib_conf configure FC over IB vHBAs
+#
+# chkconfig: - 06 94
+# description: Activates/Deactivates mlx4 FC over IB virtual HBAs configured to \
+#              start at boot time.
+#
+### BEGIN INIT INFO
+# Provides: mlx4_fcoib_conf
+# Required-Start: openibd
+# Should-Start:
+# Required-Stop: $null
+# Should-Stop:
+# Default-Start:  2 3 5
+# Default-Stop: 0 1 2 6
+# Short-Description: Bring up/down vhba
+# Description: Bring up/down vhba
+### END INIT INFO
+
+CWD=`pwd`
+TMP=/tmp
+
+SYSFS=/sys/class/mlxfc
+VERBOSE=${VERBOSE:-"no"}
+config=${config:-"/etc/mlxfc/vhbas_fcoib.conf"}
+min_num_of_params=5
+max_num_of_params=9
+created=0
+deleted=0
+failed=0
+invalid=0
+add_timeout=5
+del_timeout=10
+
+# Get a sane screen width
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+[ -z "${CONSOLETYPE:-}" ] && [ -x /sbin/consoletype ] && CONSOLETYPE="`/sbin/consoletype`"
+
+if [ -f /etc/sysconfig/i18n -a -z "${NOLOCALE:-}" ] ; then
+	. /etc/sysconfig/i18n
+	if [ "$CONSOLETYPE" != "pty" ]; then
+		case "${LANG:-}" in
+			ja_JP*|ko_KR*|zh_CN*|zh_TW*)
+				export LC_MESSAGES=en_US
+				;;
+			*)
+				export LANG
+				;;
+		esac
+	else
+		export LANG
+	fi
+fi
+
+# Read in our configuration
+if [ -z "${BOOTUP:-}" ]; then
+	if [ -f /etc/sysconfig/init ]; then
+		. /etc/sysconfig/init
+	else
+		# This all seem confusing? Look in /etc/sysconfig/init,
+		# or in /usr/doc/initscripts-*/sysconfig.txt
+		BOOTUP=color
+		RES_COL=60
+		MOVE_TO_COL="echo -en \\033[${RES_COL}G"
+		SETCOLOR_SUCCESS="echo -en \\033[1;32m"
+		SETCOLOR_FAILURE="echo -en \\033[1;31m"
+		SETCOLOR_WARNING="echo -en \\033[1;33m"
+		SETCOLOR_NORMAL="echo -en \\033[0;39m"
+		LOGLEVEL=1
+	fi
+	if [ "$CONSOLETYPE" = "serial" ]; then
+		BOOTUP=serial
+		MOVE_TO_COL=
+		SETCOLOR_SUCCESS=
+		SETCOLOR_FAILURE=
+		SETCOLOR_WARNING=
+		SETCOLOR_NORMAL=
+	fi
+fi
+
+if [ "${BOOTUP:-}" != "verbose" ]; then
+	INITLOG_ARGS="-q"
+else
+	INITLOG_ARGS=
+fi
+
+echo_success() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "[  "
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_SUCCESS
+	echo -n $"OK"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "  ]"
+	echo -e "\r"
+	return 0
+}
+
+echo_done() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "[  "
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n $"done"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "  ]"
+	echo -e "\r"
+	return 0
+}
+
+echo_failure() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "["
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_FAILURE
+	echo -n $"FAILED" 
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "]"
+	echo -e "\r"
+	return 1
+}
+
+echo_warning() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "["
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_WARNING
+	echo -n $"WARNING"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "]"
+	echo -e "\r"
+	return 1
+}
+
+if [ ! -e $config ]; then
+	if [ "$1" == "start" ] || [ "$1" == "reload" ]; then
+		# config is needed only for 'start' and 'reload'
+		echo_failure "Configuration file does not exist: $config"
+		exit 1
+	else
+		[ "$VERBOSE" = no ] || echo $"perform action ($1) without config file"
+	fi
+fi
+
+if [ ! -d "/sys/module/mlx4_fcoib" ]; then
+	echo_failure "ERROR: mlx4_fcoib module is not loaded"
+	exit 1
+fi
+
+is_integer()
+{
+	printf "%s\n" $1 |grep -E "^[+-]?[0-9]+$" > /dev/null
+	return $?
+}
+
+check_value() {
+	line=$1
+	parameter=$2
+	value=$3
+	shift 3
+
+	case $parameter in
+		wwpn|gw_guid)
+			if [ -z `echo $value | sed -n "/^\([0-9a-fA-F][0-9a-fA-F]\)\{8\}$/p"` ]; then
+				[ "$VERBOSE" = no ] || echo "line $line: bad $parameter"
+				return 1
+			fi
+		;;
+		mfc_port)
+			if ! [[ $value =~ ^mfc[0-9]+/port[1-2] ]]; then
+				[ "$VERBOSE" = no ] || echo "line $line: bad $parameter"
+				return 1
+			fi
+		;;
+		gw_port_id)
+			if ! [[ $value =~ ^[0-9a-fA-F]+ ]]; then
+				[ "$VERBOSE" = no ] || echo "line $line: bad $parameter"
+				return 1
+			fi
+		;;
+		*)
+		# Unsupported parameter
+		[ "$VERBOSE" = no ] || echo "line $line: unsupported parameter $parameter"
+		return 1
+		;;
+	esac
+
+	return 0
+}
+
+check_config_line() {
+	i=$1
+	shift
+	str=$*
+
+	set -- $str
+
+	if [ $# -lt 4 ]; then
+		[ "$VERBOSE" = no ] || echo "line $i: not enough parameters"
+		return 1
+	fi
+
+	# set parameters
+	export $str
+	if [ $? -ne 0 ]; then
+		[ "$VERBOSE" = no ] || echo "line $i: bad line format"
+		return 1
+	fi
+
+	check_value $i wwpn    $wwpn	|| return 1
+	check_value $i gw_guid $gw_guid	|| return 1
+	check_value $i gw_port_id $gw_port_id	|| return 1
+	check_value $i mfc_port $mfc_port	|| return 1
+
+	return 0
+}
+
+check_config() {
+	i=0
+
+	cat "$config" 2> /dev/null | (
+	while read str
+	do
+		let i=i+1
+		# Check for empty or commented line
+		if ( echo $str |  grep -E "^$|^#" > /dev/null 2>&1 ); then
+			continue
+		fi
+		check_config_line $i $str || exit 1
+	done )
+
+	return $?
+}
+
+case "$1" in
+	start)
+		created=0
+		failed=0
+		invalid=0
+		if ! check_config; then 
+			echo_failure $"Checking configuration file:"
+			exit 1
+		fi
+		echo_success $"Checking configuration file:"
+
+		i=0
+		# Parse configuration file
+		while read str
+		do
+			let i=i+1
+			# Check for empty or commented line
+			if ( echo $str |  grep -E "^$|^#" > /dev/null 2>&1 ); then
+				continue
+			fi
+
+			export $str
+
+			if [ ! -f ${SYSFS}/${mfc_port}/create ]; then
+				[ $VERBOSE = no ] || echo WARNING: No such device: ${mfc_port}
+				((invalid++))
+				continue
+			fi
+
+			[ $VERBOSE = no ] || echo creating on $mfc_port WWPN $wwpn GW $gw_guid GWPID $gw_port_id
+			line=`echo "A $gw_guid $gw_port_id $wwpn"`
+			echo "$line"  > ${SYSFS}/${mfc_port}/create
+
+			((created++))
+		done < $config
+
+		if [ $created -gt 0 ]; then
+			echo_success $"Creating $created new vHBAs:"
+		fi
+		if [ $failed -gt 0 ]; then
+			echo_failure $"Creating $failed new vHBAs:"
+		fi
+		if [ $invalid -gt 0 ]; then
+			echo_warning $"$invalid devices cannot be created as corresponding mfc device does not exist"
+		fi
+	;;
+	*)
+	echo $"Usage: $0 {start}"
+	exit 1
+	;;
+esac

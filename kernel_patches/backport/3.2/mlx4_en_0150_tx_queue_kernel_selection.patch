@@ -1,0 +1,156 @@
+diff --git a/drivers/net/mlx4/en_main.c b/drivers/net/mlx4/en_main.c
+index 315bf23..71552b3 100644
+--- a/drivers/net/mlx4/en_main.c
++++ b/drivers/net/mlx4/en_main.c
+@@ -121,7 +121,7 @@ static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
+ 		params->prof[i].tx_ppp = pfctx;
+ 		params->prof[i].tx_ring_size = MLX4_EN_DEF_TX_RING_SIZE;
+ 		params->prof[i].rx_ring_size = MLX4_EN_DEF_RX_RING_SIZE;
+-		params->prof[i].tx_ring_num = MLX4_EN_NUM_HASH_RINGS + 1 +
++		params->prof[i].tx_ring_num = MLX4_EN_NUM_HASH_RINGS +
+ 			(!!pfcrx) * MLX4_EN_NUM_PPP_RINGS;
+ 	}
+ 
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 3b42b8e..46b5634 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1236,10 +1236,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	}
+ 	priv->allocated = 1;
+ 
+-	/* Populate Tx priority mappings */
+-	mlx4_en_set_prio_map(priv, priv->tx_prio_map,
+-			     prof->tx_ring_num - MLX4_EN_NUM_HASH_RINGS);
+-
+ 	/*
+ 	 * Initialize netdev entry points
+ 	 */
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index c7359bc..4b6be73 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -305,35 +305,6 @@ int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring)
+ 	return cnt;
+ }
+ 
+-void mlx4_en_set_prio_map(struct mlx4_en_priv *priv, u16 *prio_map, u32 ring_num)
+-{
+-	int block = 8 / ring_num;
+-	int extra = 8 - (block * ring_num);
+-	int num = 0;
+-	u16 ring = 1;
+-	int prio;
+-
+-	if (ring_num == 1) {
+-		for (prio = 0; prio < 8; prio++)
+-			prio_map[prio] = 0;
+-		return;
+-	}
+-
+-	for (prio = 0; prio < 8; prio++) {
+-		if (extra && (num == block + 1)) {
+-			ring++;
+-			num = 0;
+-			extra--;
+-		} else if (!extra && (num == block)) {
+-			ring++;
+-			num = 0;
+-		}
+-		prio_map[prio] = ring;
+-		en_dbg(DRV, priv, " prio:%d --> ring:%d\n", prio, ring);
+-		num++;
+-	}
+-}
+-
+ static int mlx4_en_process_tx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int budget)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+@@ -614,54 +585,13 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+ 	u16 vlan_tag = 0;
+-	int tx_ind = 0;
+-	struct tcphdr *th = tcp_hdr(skb);
+-	struct iphdr *iph = ip_hdr(skb);
+-	struct mlx4_en_tx_hash_entry *entry;
+-	u32 hash_index;
+ 
+-	/* Obtain VLAN information if present */
+-	if (priv->vlgrp && vlan_tx_tag_present(skb)) {
++	if (priv->prof->rx_ppp && vlan_tx_tag_present(skb)) {
+ 		vlan_tag = vlan_tx_tag_get(skb);
+-		/* Set the Tx ring to use according to vlan priority */
+-		tx_ind = priv->tx_prio_map[vlan_tag >> 13];
+-		if (tx_ind)
+-			return tx_ind;
+-	}
+-
+-	/* Hashing is only done for TCP/IP or UDP/IP packets */
+-	if (be16_to_cpu(skb->protocol) != ETH_P_IP)
+-		return MLX4_EN_NUM_HASH_RINGS;
+-
+-	hash_index = be32_to_cpu(iph->daddr) & MLX4_EN_TX_HASH_MASK;
+-	switch(iph->protocol) {
+-	case IPPROTO_UDP:
+-		break;
+-	case IPPROTO_TCP:
+-		if (th) {
+-			hash_index = (hash_index ^ be16_to_cpu(th->dest ^ th->source)) &
+-					MLX4_EN_TX_HASH_MASK;
+-		}
+-		break;
+-	default:
+-		return MLX4_EN_NUM_HASH_RINGS;
++		return MLX4_EN_NUM_HASH_RINGS + (vlan_tag >> 13);
+ 	}
+ 
+-	entry = &priv->tx_hash[hash_index];
+-	if(unlikely(!entry->cnt)) {
+-		tx_ind = hash_index & (MLX4_EN_NUM_HASH_RINGS / 2 - 1);
+-		if (2 * entry->small_pkts > entry->big_pkts)
+-			tx_ind += MLX4_EN_NUM_HASH_RINGS / 2;
+-		entry->small_pkts = entry->big_pkts = 0;
+-		entry->ring = tx_ind;
+-	}
+-
+-	entry->cnt++;
+-	if (skb->len > MLX4_EN_SMALL_PKT_SIZE)
+-		entry->big_pkts++;
+-	else
+-		entry->small_pkts++;
+-	return entry->ring;
++	return skb_tx_hash(dev, skb);
+ }
+ 
+ static void mlx4_bf_copy(unsigned long *dst, unsigned long *src, unsigned bytecnt)
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 90a0ab3..581d746 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -93,7 +93,7 @@
+ 
+ #define MLX4_EN_PAGE_SHIFT	12
+ #define MLX4_EN_PAGE_SIZE	(1 << MLX4_EN_PAGE_SHIFT)
+-#define MAX_TX_RINGS		(MLX4_EN_NUM_HASH_RINGS + 1 + MLX4_EN_NUM_PPP_RINGS)
++#define MAX_TX_RINGS		(MLX4_EN_NUM_HASH_RINGS + MLX4_EN_NUM_PPP_RINGS)
+ #define MAX_RX_RINGS		16
+ #define MIN_RX_RINGS		1
+ #define MIN_DEF_RX_RINGS	4
+@@ -142,7 +142,7 @@ enum {
+ #define MLX4_EN_SMALL_PKT_SIZE		64
+ #define MLX4_EN_TX_HASH_SIZE		256
+ #define MLX4_EN_TX_HASH_MASK		(MLX4_EN_TX_HASH_SIZE - 1)
+-#define MLX4_EN_NUM_HASH_RINGS		4
++#define MLX4_EN_NUM_HASH_RINGS		16
+ #define MLX4_EN_NUM_PPP_RINGS		8
+ #define MLX4_EN_DEF_TX_RING_SIZE	512
+ #define MLX4_EN_DEF_RX_RING_SIZE  	1024
+@@ -669,7 +669,6 @@ int mlx4_en_map_buffer(struct mlx4_buf *buf);
+ void mlx4_en_unmap_buffer(struct mlx4_buf *buf);
+ 
+ void mlx4_en_calc_rx_buf(struct net_device *dev);
+-void mlx4_en_set_prio_map(struct mlx4_en_priv *priv, u16 *prio_map, u32 ring_num);
+ int mlx4_en_config_rss_steer(struct mlx4_en_priv *priv);
+ void mlx4_en_release_rss_steer(struct mlx4_en_priv *priv);
+ int mlx4_en_free_tx_buf(struct net_device *dev, struct mlx4_en_tx_ring *ring);

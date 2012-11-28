@@ -1,0 +1,55 @@
+---
+ drivers/infiniband/ulp/sdp/sdp_cma.c  |    1 +
+ drivers/infiniband/ulp/sdp/sdp_main.c |    8 ++++----
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+Index: ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_cma.c
+===================================================================
+--- ofed_kernel-2.6.9_U7.orig/drivers/infiniband/ulp/sdp/sdp_cma.c	2010-11-03 17:52:57.000000000 +0200
++++ ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_cma.c	2010-11-03 17:55:10.000000000 +0200
+@@ -31,6 +31,7 @@
+  *
+  * $Id$
+  */
++#include <asm/semaphore.h>
+ #include <linux/device.h>
+ #include <linux/in.h>
+ #include <linux/err.h>
+Index: ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_main.c
+===================================================================
+--- ofed_kernel-2.6.9_U7.orig/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-03 17:54:52.000000000 +0200
++++ ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_main.c	2010-11-03 17:55:10.000000000 +0200
+@@ -731,7 +731,7 @@
+ 	if (data_was_unread ||
+ 		(sock_flag(sk, SOCK_LINGER) && !sk->sk_lingertime)) {
+ 		/* Unread data was tossed, zap the connection. */
+-		NET_INC_STATS_USER(sock_net(sk), LINUX_MIB_TCPABORTONCLOSE);
++		NET_INC_STATS_USER(LINUX_MIB_TCPABORTONCLOSE);
+ 		sdp_exch_state(sk, TCPF_CLOSE_WAIT | TCPF_ESTABLISHED,
+ 			       TCP_TIME_WAIT);
+ 
+@@ -2680,9 +2680,9 @@
+ 	return mask;
+ }
+ 
+-static void sdp_enter_memory_pressure(struct sock *sk)
++static void sdp_enter_memory_pressure(void)
+ {
+-	sdp_dbg(sk, "%s\n", __func__);
++	sdp_dbg(NULL, "%s\n", __func__);
+ }
+ 
+ void sdp_urg(struct sdp_sock *ssk, struct sk_buff *skb)
+Index: ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_dbg.h
+===================================================================
+--- ofed_kernel-2.6.9_U7.orig/drivers/infiniband/ulp/sdp/sdp_dbg.h	2010-11-03 17:52:57.000000000 +0200
++++ ofed_kernel-2.6.9_U7/drivers/infiniband/ulp/sdp/sdp_dbg.h	2010-11-03 17:55:42.000000000 +0200
+@@ -11,7 +11,7 @@
+ #define SDP_PROFILING
+ #endif
+ 
+-#define SDP_WARN_ON(x) WARN_ON(x)
++#define SDP_WARN_ON(x) BUG_TRAP(!(x))
+ static inline struct sdp_sock *sdp_sk(const struct sock *sk);
+ 
+ #define _sdp_printk(func, line, level, sk, format, arg...) do {               \

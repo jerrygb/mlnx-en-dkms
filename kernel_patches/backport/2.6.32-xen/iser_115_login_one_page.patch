@@ -1,0 +1,79 @@
+ib/iser: work-around for XenServer junk dma issue
+
+Use a buffer of 4096 bytes (one page) for all the iscsi login/text
+related interaction in iser. So far this seems to provide work around
+for the "junk DMA addresses" problem we observed on Xen-Server observed
+and validated on Citrix XenServer 5.6 sp2 5.6.100-46766p with kernel
+2.6.32.12-0.7.1.xs5.6.100.323.170596xen  #1 SMP Fri Apr 8 07:25:07
+EDT 2011 i686 i686 i386 GNU/Linux
+
+Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+
+---
+ drivers/infiniband/ulp/iser/iscsi_iser.h     |    3 ++-
+ drivers/infiniband/ulp/iser/iser_initiator.c |    2 +-
+ drivers/infiniband/ulp/iser/iser_verbs.c     |    9 ++++-----
+ 3 files changed, 7 insertions(+), 7 deletions(-)
+
+Index: mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iscsi_iser.h
+===================================================================
+--- mlnx-ofa_kernel-1.5.3-xs.orig/drivers/infiniband/ulp/iser/iscsi_iser.h
++++ mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iscsi_iser.h
+@@ -137,7 +137,9 @@ struct iser_hdr {
+
+ #define ISER_RECV_DATA_SEG_LEN	128
+ #define ISER_RX_PAYLOAD_SIZE	(ISER_HEADERS_LEN + ISER_RECV_DATA_SEG_LEN)
+-#define ISER_RX_LOGIN_SIZE	(ISER_HEADERS_LEN + ISCSI_DEF_MAX_RECV_SEG_LEN)
++#define ISER_LOGIN_SIZE		4096
++#define ISER_RX_LOGIN_SIZE	2048
++#define ISER_TX_LOGIN_SIZE	2048
+
+ /* Length of an object name string */
+ #define ISER_OBJECT_NAME_SIZE		    64
+Index: mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- mlnx-ofa_kernel-1.5.3-xs.orig/drivers/infiniband/ulp/iser/iser_verbs.c
++++ mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iser_verbs.c
+@@ -161,17 +161,16 @@ static int iser_create_ib_conn_res(struc
+
+ 	device = ib_conn->device;
+
+-	ib_conn->login_buf = kmalloc(ISCSI_DEF_MAX_RECV_SEG_LEN +
+-					ISER_RX_LOGIN_SIZE, GFP_KERNEL);
++	ib_conn->login_buf = kmalloc(ISER_LOGIN_SIZE, GFP_KERNEL);
+ 	if (!ib_conn->login_buf)
+ 		goto out_err;
+
+ 	ib_conn->login_req_buf  = ib_conn->login_buf;
+-	ib_conn->login_resp_buf = ib_conn->login_buf + ISCSI_DEF_MAX_RECV_SEG_LEN;
++	ib_conn->login_resp_buf = ib_conn->login_buf + ISER_TX_LOGIN_SIZE;
+
+ 	ib_conn->login_req_dma = ib_dma_map_single(ib_conn->device->ib_device,
+ 				(void *)ib_conn->login_req_buf,
+-				ISCSI_DEF_MAX_RECV_SEG_LEN, DMA_TO_DEVICE);
++				ISER_TX_LOGIN_SIZE, DMA_TO_DEVICE);
+
+ 	ib_conn->login_resp_dma = ib_dma_map_single(ib_conn->device->ib_device,
+ 				(void *)ib_conn->login_resp_buf,
+@@ -184,7 +183,7 @@ static int iser_create_ib_conn_res(struc
+ 	bad_resp = (ib_conn->login_resp_dma & 0xfffffffff00000000)? 0 : 1 ;
+
+ 	iser_err("login buf %p size %d kvirt/dma - req %p/%llx resp %p/%llx dma err %d/%d bad %d/%d\n",
+-		ib_conn->login_buf, ISCSI_DEF_MAX_RECV_SEG_LEN+ISER_RX_LOGIN_SIZE,
++		ib_conn->login_buf, ISER_LOGIN_SIZE,
+ 		ib_conn->login_req_buf, ib_conn->login_req_dma,
+ 		ib_conn->login_resp_buf, ib_conn->login_resp_dma, req_err, resp_err,
+ 		bad_req, bad_resp);
+Index: mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iser_initiator.c
+===================================================================
+--- mlnx-ofa_kernel-1.5.3-xs.orig/drivers/infiniband/ulp/iser/iser_initiator.c
++++ mlnx-ofa_kernel-1.5.3-xs/drivers/infiniband/ulp/iser/iser_initiator.c
+@@ -224,7 +224,7 @@ void iser_free_rx_descriptors(struct ise
+ 		if (ib_conn->login_req_dma)
+ 			ib_dma_unmap_single(device->ib_device,
+ 				ib_conn->login_req_dma,
+-				ISCSI_DEF_MAX_RECV_SEG_LEN, DMA_TO_DEVICE);
++				ISER_TX_LOGIN_SIZE, DMA_TO_DEVICE);
+ 		if (ib_conn->login_resp_dma)
+ 			ib_dma_unmap_single(device->ib_device,
+ 				ib_conn->login_resp_dma,

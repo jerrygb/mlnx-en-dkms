@@ -1,0 +1,43 @@
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/libfcoe.c ofa_kernel-1.5.1/drivers/scsi/fcoe/libfcoe.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/libfcoe.c	2010-06-24 13:48:12.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/fcoe/libfcoe.c	2010-06-24 13:57:59.000000000 -0700
+@@ -32,6 +32,7 @@
+ #include <linux/errno.h>
+ #include <linux/bitops.h>
+ #include <linux/slab.h>
++#include <linux/unaligned/access_ok.h>
+ #include <net/rtnetlink.h>
+ 
+ #include <scsi/fc/fc_els.h>
+@@ -49,6 +50,7 @@
+ 
+ #define	FCOE_CTLR_MIN_FKA	500		/* min keep alive (mS) */
+ #define	FCOE_CTLR_DEF_FKA	FIP_DEF_FKA	/* default keep alive (mS) */
++#define BIT(nr)			(1UL << (nr))
+ 
+ static void fcoe_ctlr_timeout(unsigned long);
+ static void fcoe_ctlr_timer_work(struct work_struct *);
+@@ -156,7 +158,7 @@
+  */
+ void fcoe_ctlr_destroy(struct fcoe_ctlr *fip)
+ {
+-	cancel_work_sync(&fip->recv_work);
++	flush_scheduled_work();
+ 	skb_queue_purge(&fip->fip_recv_list);
+ 
+ 	spin_lock_bh(&fip->lock);
+@@ -164,7 +166,6 @@
+ 	fcoe_ctlr_reset_fcfs(fip);
+ 	spin_unlock_bh(&fip->lock);
+ 	del_timer_sync(&fip->timer);
+-	cancel_work_sync(&fip->timer_work);
+ }
+ EXPORT_SYMBOL(fcoe_ctlr_destroy);
+ 
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/Makefile ofa_kernel-1.5.1/drivers/scsi/fcoe/Makefile
+--- ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/Makefile	2010-06-24 13:48:05.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/fcoe/Makefile	2010-06-24 13:52:48.000000000 -0700
+@@ -1,2 +1,2 @@
+-obj-$(CONFIG_FCOE) += fcoe.o
++#obj-$(CONFIG_FCOE) += fcoe.o
+ obj-$(CONFIG_LIBFCOE) += libfcoe.o

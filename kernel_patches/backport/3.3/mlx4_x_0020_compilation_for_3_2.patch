@@ -1,0 +1,449 @@
+From 4b4018d7f6df1a2ef965bbd193dcce26cbd7e8e3 Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Tue, 21 Aug 2012 13:54:09 +0300
+Subject: [PATCH] compilation for 3.2
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+---
+ drivers/net/mlx4/alloc.c     |    1 +
+ drivers/net/mlx4/catas.c     |    1 +
+ drivers/net/mlx4/cmd.c       |    1 +
+ drivers/net/mlx4/cq.c        |    1 +
+ drivers/net/mlx4/en_netdev.c |    3 +-
+ drivers/net/mlx4/en_port.c   |    1 +
+ drivers/net/mlx4/en_rx.c     |   44 +++++++++++++++++++++--------------------
+ drivers/net/mlx4/en_tx.c     |   23 +++++----------------
+ drivers/net/mlx4/eq.c        |    1 +
+ drivers/net/mlx4/fw.c        |    2 +
+ drivers/net/mlx4/intf.c      |    2 +
+ drivers/net/mlx4/mcg.c       |    1 +
+ drivers/net/mlx4/mlx4_en.h   |    6 ++--
+ drivers/net/mlx4/mr.c        |    1 +
+ drivers/net/mlx4/pd.c        |    1 +
+ drivers/net/mlx4/port.c      |    1 +
+ drivers/net/mlx4/qp.c        |    1 +
+ drivers/net/mlx4/srq.c       |    1 +
+ drivers/net/mlx4/xrcd.c      |    1 +
+ 19 files changed, 51 insertions(+), 42 deletions(-)
+
+diff --git a/drivers/net/mlx4/alloc.c b/drivers/net/mlx4/alloc.c
+index 3d27374..9438d72 100644
+--- a/drivers/net/mlx4/alloc.c
++++ b/drivers/net/mlx4/alloc.c
+@@ -37,6 +37,7 @@
+ #include <linux/bitmap.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/vmalloc.h>
++#include <linux/module.h>
+ 
+ #include "mlx4.h"
+ 
+diff --git a/drivers/net/mlx4/catas.c b/drivers/net/mlx4/catas.c
+index e0abc24..f0ca6de 100644
+--- a/drivers/net/mlx4/catas.c
++++ b/drivers/net/mlx4/catas.c
+@@ -32,6 +32,7 @@
+  */
+ 
+ #include <linux/workqueue.h>
++#include <linux/moduleparam.h>
+ 
+ #include "mlx4.h"
+ 
+diff --git a/drivers/net/mlx4/cmd.c b/drivers/net/mlx4/cmd.c
+index 818982a..d7b081a 100644
+--- a/drivers/net/mlx4/cmd.c
++++ b/drivers/net/mlx4/cmd.c
+@@ -36,6 +36,7 @@
+ #include <linux/pci.h>
+ #include <linux/errno.h>
+ #include <linux/semaphore.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+diff --git a/drivers/net/mlx4/cq.c b/drivers/net/mlx4/cq.c
+index 76627f4..2f6f06c 100644
+--- a/drivers/net/mlx4/cq.c
++++ b/drivers/net/mlx4/cq.c
+@@ -36,6 +36,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/hardirq.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ #include <linux/mlx4/cq.h>
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index af9855b..6906184 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1384,7 +1384,8 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	int i;
+ 	int err;
+ 
+-	dev = alloc_etherdev_mq(sizeof(struct mlx4_en_priv), prof->tx_ring_num);
++	dev = alloc_etherdev_mqs(sizeof(struct mlx4_en_priv), 
++		prof->tx_ring_num, prof->rx_ring_num);
+ 	if (dev == NULL) {
+ 		mlx4_err(mdev, "Net device allocation failed\n");
+ 		return -ENOMEM;
+diff --git a/drivers/net/mlx4/en_port.c b/drivers/net/mlx4/en_port.c
+index 2d0ec9a..f7ff778 100644
+--- a/drivers/net/mlx4/en_port.c
++++ b/drivers/net/mlx4/en_port.c
+@@ -33,6 +33,7 @@
+ 
+ 
+ #include <linux/if_vlan.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/device.h>
+ #include <linux/mlx4/cmd.h>
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index a27ef50..6819a20 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -46,7 +46,7 @@ enum {
+ 
+ static int mlx4_en_alloc_frag(struct mlx4_en_priv *priv,
+ 			      struct mlx4_en_rx_desc *rx_desc,
+-			      struct skb_frag_struct *skb_frags,
++			      struct page_frag *skb_frags,
+ 			      struct mlx4_en_rx_alloc *ring_alloc,
+ 			      int i)
+ {
+@@ -64,7 +64,7 @@ static int mlx4_en_alloc_frag(struct mlx4_en_priv *priv,
+ 			return -ENOMEM;
+ 
+ 		skb_frags[i].page = page_alloc->page;
+-		skb_frags[i].page_offset = page_alloc->offset;
++		skb_frags[i].offset = page_alloc->offset;
+ 		page_alloc->page = page;
+ 		page_alloc->offset = frag_info->frag_align;
+ 		new_page = true;
+@@ -73,11 +73,11 @@ static int mlx4_en_alloc_frag(struct mlx4_en_priv *priv,
+ 		get_page(page);
+ 
+ 		skb_frags[i].page = page;
+-		skb_frags[i].page_offset = page_alloc->offset;
++		skb_frags[i].offset = page_alloc->offset;
+ 		page_alloc->offset += frag_info->frag_stride;
+ 	}
+ 	dma = dma_map_single(priv->ddev, page_address(skb_frags[i].page) +
+-			     skb_frags[i].page_offset, frag_info->frag_size,
++			     skb_frags[i].offset, frag_info->frag_size,
+ 			     PCI_DMA_FROMDEVICE);
+ 	if (unlikely(dma_mapping_error(priv->ddev, dma))) {
+ 		en_err(priv, "Failed dma mapping page for RX buffer\n");
+@@ -174,7 +174,7 @@ static int mlx4_en_prepare_rx_desc(struct mlx4_en_priv *priv,
+ 				   struct mlx4_en_rx_ring *ring, int index)
+ {
+ 	struct mlx4_en_rx_desc *rx_desc = ring->buf + (index * ring->stride);
+-	struct skb_frag_struct *skb_frags = ring->rx_info +
++	struct page_frag *skb_frags = ring->rx_info +
+ 					    (index << priv->log_rx_info);
+ 	int i;
+ 
+@@ -218,7 +218,7 @@ static void mlx4_en_free_rx_desc(struct mlx4_en_priv *priv,
+ 				 struct mlx4_en_rx_ring *ring,
+ 				 int index)
+ {
+-	struct skb_frag_struct *skb_frags;
++	struct page_frag *skb_frags;
+ 	struct mlx4_en_rx_desc *rx_desc = ring->buf + (index << ring->log_stride);
+ 	dma_addr_t dma;
+ 	int nr;
+@@ -454,11 +454,12 @@ void mlx4_en_deactivate_rx_ring(struct mlx4_en_priv *priv,
+ /* Unmap a completed descriptor and free unused pages */
+ int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
+ 			     struct mlx4_en_rx_desc *rx_desc,
+-			     struct skb_frag_struct *skb_frags,
+-			     struct skb_frag_struct *skb_frags_rx,
++			     struct page_frag *skb_frags,
++			     struct sk_buff *skb,
+ 			     struct mlx4_en_rx_alloc *page_alloc,
+ 			     int length)
+ {
++	struct skb_frag_struct *skb_frags_rx = skb_shinfo(skb)->frags;
+ 	struct mlx4_en_frag_info *frag_info;
+ 	int nr;
+ 	dma_addr_t dma;
+@@ -470,25 +471,27 @@ int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
+ 			break;
+ 
+ 		/* Save page reference in skb */
+-		skb_frags_rx[nr].page = skb_frags[nr].page;
+-		skb_frags_rx[nr].size = skb_frags[nr].size;
+-		skb_frags_rx[nr].page_offset = skb_frags[nr].page_offset;
++		__skb_frag_set_page(&skb_frags_rx[nr], skb_frags[nr].page);
++		skb_frag_size_set(&skb_frags_rx[nr], skb_frags[nr].size);
++		skb_frags_rx[nr].page_offset = skb_frags[nr].offset;
++		skb->truesize += frag_info->frag_stride;
+ 		/* set the current fragment as invalid, to be allocated later */
+ 		skb_frags[nr].page = NULL;
+ 		dma = be64_to_cpu(rx_desc->data[nr].addr);
+-		dma_unmap_single(priv->ddev, dma, skb_frags_rx[nr].size,
++		dma_unmap_single(priv->ddev, dma, skb_frag_size(&skb_frags_rx[nr]),
+ 				 PCI_DMA_FROMDEVICE);
+ 	}
+ 	/* Adjust size of last fragment to match actual length */
+-	skb_frags_rx[nr - 1].size = length -
+-		priv->frag_info[nr - 1].frag_prefix_size;
++	if (nr > 0)
++		skb_frag_size_set(&skb_frags_rx[nr - 1],
++				length - priv->frag_info[nr - 1].frag_prefix_size);
+ 	return nr;
+ }
+ 
+ 
+ struct sk_buff *mlx4_en_rx_skb(struct mlx4_en_priv *priv,
+ 			       struct mlx4_en_rx_desc *rx_desc,
+-			       struct skb_frag_struct *skb_frags,
++			       struct page_frag *skb_frags,
+ 			       struct mlx4_en_rx_alloc *page_alloc,
+ 			       struct mlx4_en_rx_ring *ring,
+ 			       unsigned int length, u32 index)
+@@ -508,7 +511,7 @@ struct sk_buff *mlx4_en_rx_skb(struct mlx4_en_priv *priv,
+ 
+ 	/* Get pointer to first fragment so we could copy the headers into the
+ 	 * (linear part of the) skb */
+-	va = page_address(skb_frags[0].page) + skb_frags[0].page_offset;
++	va = page_address(skb_frags[0].page) + skb_frags[0].offset;
+ 
+ 	if (length <= SMALL_PACKET_SIZE) {
+ 		/* We are copying all relevant data to the skb */
+@@ -518,8 +521,7 @@ struct sk_buff *mlx4_en_rx_skb(struct mlx4_en_priv *priv,
+ 
+ 		/* Move relevant fragments to skb */
+ 		used_frags = mlx4_en_complete_rx_desc(priv, rx_desc, skb_frags,
+-						      skb_shinfo(skb)->frags,
+-						      page_alloc, length);
++						      skb, page_alloc, length);
+ 		skb_shinfo(skb)->nr_frags = used_frags;
+ 
+ 		/* Copy headers into the skb linear buffer */
+@@ -572,7 +574,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 	struct mlx4_cqe *cqe;
+ 	struct mlx4_cq *mcq = &cq->mcq;
+ 	struct mlx4_en_rx_ring *ring = priv->rx_ring[cq->ring];
+-	struct skb_frag_struct *skb_frags;
++	struct page_frag *skb_frags;
+ 	struct mlx4_en_rx_desc *rx_desc;
+ 	struct sk_buff *skb;
+ 	struct net_device_stats *stats = &priv->stats;
+@@ -640,7 +642,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 
+ 					nr = mlx4_en_complete_rx_desc(
+ 						priv, rx_desc,
+-						skb_frags, skb_shinfo(gro_skb)->frags,
++						skb_frags, gro_skb,
+ 						ring->page_alloc, length);
+ 					if (!nr)
+ 						goto next;
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index 3afafa2..7e7bf21 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -37,6 +37,7 @@
+ #include <linux/skbuff.h>
+ #include <linux/if_vlan.h>
+ #include <linux/vmalloc.h>
++#include <linux/moduleparam.h>
+ 
+ #include "mlx4_en.h"
+ 
+@@ -434,26 +435,13 @@ mlx4_en_bounce_to_desc(struct mlx4_en_tx_ring *ring, u32 index,
+ 	return ring->buf + index * TXBB_SIZE;
+ }
+ 
+-static void *get_frag_ptr(struct sk_buff *skb)
+-{
+-	struct skb_frag_struct *frag =  &skb_shinfo(skb)->frags[0];
+-	struct page *page = frag->page;
+-	void *ptr;
+-
+-	ptr = page_address(page);
+-	if (unlikely(!ptr))
+-		return NULL;
+-
+-	return ptr + frag->page_offset;
+-}
+-
+ static int is_inline(struct sk_buff *skb, void **pfrag)
+ {
+ 	void *ptr;
+ 
+ 	if (inline_thold && !skb_is_gso(skb) && skb->len <= inline_thold) {
+ 		if (skb_shinfo(skb)->nr_frags == 1) {
+-			ptr = get_frag_ptr(skb);
++			ptr = skb_frag_address_safe(&skb_shinfo(skb)->frags[0]);
+ 			if (unlikely(!ptr))
+ 				return 0;
+ 
+@@ -738,14 +726,15 @@ int mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
+ 		/* Map fragments */
+ 		for (i = skb_shinfo(skb)->nr_frags - 1; i >= 0; i--) {
+ 			frag = &skb_shinfo(skb)->frags[i];
+-			dma = dma_map_page(ddev, frag->page, frag->page_offset,
+-					   frag->size, PCI_DMA_TODEVICE);
++			dma = skb_frag_dma_map(ddev, frag, 0,
++					       skb_frag_size(frag),
++					       PCI_DMA_TODEVICE);
+ 			if (unlikely(dma_mapping_error(ddev, dma)))
+ 				goto err_dma;
+ 			data->addr = cpu_to_be64(dma);
+ 			data->lkey = cpu_to_be32(mr->key);
+ 			wmb();
+-			data->byte_count = cpu_to_be32(frag->size);
++			data->byte_count = cpu_to_be32(skb_frag_size(frag));
+ 			--data;
+ 		}
+ 
+diff --git a/drivers/net/mlx4/eq.c b/drivers/net/mlx4/eq.c
+index de20119..2b575ff 100644
+--- a/drivers/net/mlx4/eq.c
++++ b/drivers/net/mlx4/eq.c
+@@ -35,6 +35,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/mm.h>
+ #include <linux/dma-mapping.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+diff --git a/drivers/net/mlx4/fw.c b/drivers/net/mlx4/fw.c
+index 2562372..c3d9869 100644
+--- a/drivers/net/mlx4/fw.c
++++ b/drivers/net/mlx4/fw.c
+@@ -34,6 +34,8 @@
+ 
+ #include <linux/etherdevice.h>
+ #include <linux/mlx4/cmd.h>
++#include <linux/moduleparam.h>
++#include <linux/module.h>
+ 
+ #include "fw.h"
+ #include "icm.h"
+diff --git a/drivers/net/mlx4/intf.c b/drivers/net/mlx4/intf.c
+index 2232d4a..8e2b750 100644
+--- a/drivers/net/mlx4/intf.c
++++ b/drivers/net/mlx4/intf.c
+@@ -31,6 +31,8 @@
+  * SOFTWARE.
+  */
+ 
++#include <linux/module.h>
++
+ #include "mlx4.h"
+ 
+ struct mlx4_device_context {
+diff --git a/drivers/net/mlx4/mcg.c b/drivers/net/mlx4/mcg.c
+index 04dfaf4..ff46be7 100644
+--- a/drivers/net/mlx4/mcg.c
++++ b/drivers/net/mlx4/mcg.c
+@@ -35,6 +35,7 @@
+ #include <linux/string.h>
+ #include <linux/slab.h>
+ #include <linux/etherdevice.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ #include <linux/mlx4/driver.h>
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 540c044..75525e6 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -619,14 +619,14 @@ void mlx4_en_rx_irq(struct mlx4_cq *mcq);
+ 
+ struct sk_buff *mlx4_en_rx_skb(struct mlx4_en_priv *priv,
+ 			       struct mlx4_en_rx_desc *rx_desc,
+-			       struct skb_frag_struct *skb_frags,
++			       struct page_frag *skb_frags,
+ 			       struct mlx4_en_rx_alloc *page_alloc,
+ 			       struct mlx4_en_rx_ring *ring,
+ 			       unsigned int length, u32 index);
+ int mlx4_en_complete_rx_desc(struct mlx4_en_priv *priv,
+ 			     struct mlx4_en_rx_desc *rx_desc,
+-			     struct skb_frag_struct *skb_frags,
+-			     struct skb_frag_struct *skb_frags_rx,
++			     struct page_frag *skb_frags,
++			     struct sk_buff *skb,
+ 			     struct mlx4_en_rx_alloc *page_alloc,
+ 			     int length);
+ 
+diff --git a/drivers/net/mlx4/mr.c b/drivers/net/mlx4/mr.c
+index 993ffc6..5950181 100644
+--- a/drivers/net/mlx4/mr.c
++++ b/drivers/net/mlx4/mr.c
+@@ -35,6 +35,7 @@
+ #include <linux/init.h>
+ #include <linux/errno.h>
+ #include <linux/kernel.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+diff --git a/drivers/net/mlx4/pd.c b/drivers/net/mlx4/pd.c
+index 5bad6c3..d894068 100644
+--- a/drivers/net/mlx4/pd.c
++++ b/drivers/net/mlx4/pd.c
+@@ -34,6 +34,7 @@
+ #include <linux/init.h>
+ #include <linux/errno.h>
+ #include <linux/io-mapping.h>
++#include <linux/module.h>
+ 
+ #include <asm/page.h>
+ 
+diff --git a/drivers/net/mlx4/port.c b/drivers/net/mlx4/port.c
+index 7f694db..116ed87 100644
+--- a/drivers/net/mlx4/port.c
++++ b/drivers/net/mlx4/port.c
+@@ -33,6 +33,7 @@
+ #include <linux/errno.h>
+ #include <linux/if_ether.h>
+ #include <linux/if_vlan.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+diff --git a/drivers/net/mlx4/qp.c b/drivers/net/mlx4/qp.c
+index c7d9f8e..e54b357 100644
+--- a/drivers/net/mlx4/qp.c
++++ b/drivers/net/mlx4/qp.c
+@@ -34,6 +34,7 @@
+  */
+ 
+ #include <linux/init.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ #include <linux/mlx4/qp.h>
+diff --git a/drivers/net/mlx4/srq.c b/drivers/net/mlx4/srq.c
+index 3facdb3..43f1507 100644
+--- a/drivers/net/mlx4/srq.c
++++ b/drivers/net/mlx4/srq.c
+@@ -32,6 +32,7 @@
+  */
+ 
+ #include <linux/init.h>
++#include <linux/module.h>
+ 
+ #include <linux/mlx4/cmd.h>
+ 
+diff --git a/drivers/net/mlx4/xrcd.c b/drivers/net/mlx4/xrcd.c
+index 9a9138b..90dd56c 100644
+--- a/drivers/net/mlx4/xrcd.c
++++ b/drivers/net/mlx4/xrcd.c
+@@ -33,6 +33,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/errno.h>
++#include <linux/module.h>
+ 
+ #include "mlx4.h"
+ 
+-- 
+1.7.7
+

@@ -1,0 +1,24 @@
+From 90626b2cd073f8630e39e29d6cdeddb18cd9b5e5 Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Mon, 17 Oct 2011 19:04:47 +0200
+Subject: [PATCH 4/6] mlx4_en: Recording rx queue for GRO packets
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Signed-off-by: Alexander Guller <alexg@mellanox.com>
+---
+ drivers/net/mlx4/en_rx.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index 1231b21..eed2a0a 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -618,4 +618,5 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 					gro_skb->truesize += length;
+                                        gro_skb->ip_summed = CHECKSUM_UNNECESSARY;
++					skb_record_rx_queue(gro_skb, cq->ring);
+ 
+ 					if (priv->vlgrp && (cqe->vlan_my_qpn &
+-- 
+1.7.7
+

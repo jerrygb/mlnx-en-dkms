@@ -1,0 +1,40 @@
+From 3559764213634429fc2291a2ddaaf5be370d96e4 Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Tue, 13 Mar 2012 19:11:38 +0200
+Subject: [PATCH 2/2] mlx4_en: Adjust mcast caching to 2.6.35 and up
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+---
+ drivers/net/mlx4/en_netdev.c |    6 +++---
+ 1 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index d6f6894..0f816f0 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -197,19 +197,19 @@ static void mlx4_en_clear_list(struct net_device *dev)
+ static void mlx4_en_cache_mclist(struct net_device *dev)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+-	struct dev_mc_list *mclist;
++	struct netdev_hw_addr *ha;
+ 	struct mlx4_en_mc_list *tmp;
+ 	struct mlx4_en_mc_list *plist = NULL;
+ 
+ 	mlx4_en_clear_list(dev);
+-	for (mclist = dev->mc_list; mclist; mclist = mclist->next) {
++	netdev_for_each_mc_addr(ha, dev) {
+ 		tmp = kzalloc(sizeof(struct mlx4_en_mc_list), GFP_ATOMIC);
+ 		if (!tmp) {
+ 			en_err(priv, "failed to allocate multicast list\n");
+ 			mlx4_en_clear_list(dev);
+ 			return;
+ 		}
+-		memcpy(tmp->addr, mclist->dmi_addr, ETH_ALEN);
++		memcpy(tmp->addr, ha->addr, ETH_ALEN);
+ 		tmp->next = NULL;
+ 		if (plist)
+ 			plist->next = tmp;
+-- 
+1.7.8.2
+

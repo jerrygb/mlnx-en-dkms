@@ -1,0 +1,35 @@
+Index: ofa_kernel-1.5.2/drivers/infiniband/core/uverbs_main.c
+===================================================================
+--- ofa_kernel-1.5.2.orig/drivers/infiniband/core/uverbs_main.c	2010-11-28 15:16:00.000000000 +0200
++++ ofa_kernel-1.5.2/drivers/infiniband/core/uverbs_main.c	2010-11-28 20:16:09.000000000 +0200
+@@ -44,6 +44,7 @@
+ #include <linux/mount.h>
+ #include <linux/cdev.h>
+ #include <linux/sched.h>
++#include <linux/anon_inodes.h>
+ 
+ #include <asm/uaccess.h>
+ 
+@@ -552,20 +553,13 @@
+ 		goto err;
+ 	}
+ 
+-	/*
+-	 * fops_get() can't fail here, because we're coming from a
+-	 * system call on a uverbs file, which will already have a
+-	 * module reference.
+-	 */
+-	filp = alloc_file(dget(uverbs_event_mnt->mnt_root),
+-			  FMODE_READ, fops_get(&uverbs_event_fops));
++	filp = anon_inode_getfile("[uverbs-event]", &uverbs_event_fops,
++				  ev_file, O_RDONLY);
+ 	if (!filp) {
+ 		ret = -ENFILE;
+ 		goto err_fd;
+ 	}
+ 
+-	filp->private_data = ev_file;
+-
+ 	return filp;
+ 
+ err_fd:

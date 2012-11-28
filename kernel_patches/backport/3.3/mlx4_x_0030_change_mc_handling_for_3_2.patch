@@ -1,0 +1,27 @@
+From 947759370272bbf66f056a0ce6a23522f1b54f56 Mon Sep 17 00:00:00 2001
+From: Eugenia Emantayev <eugenia@mellanox.co.il>
+Date: Thu, 10 May 2012 11:50:31 +0300
+Subject: [PATCH 3/4] mlx4_en: change mc handling API
+
+Signed-off-by: Eugenia Emantayev <eugenia@mellanox.co.il>
+---
+ drivers/net/mlx4/en_netdev.c |  162 +++++++++---------------------------------
+ drivers/net/mlx4/mlx4_en.h   |    4 +-
+ 2 files changed, 37 insertions(+), 129 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 19978d5..261aabac 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1268,7 +1177,7 @@ static const struct net_device_ops mlx4_netdev_ops = {
+ 	.ndo_start_xmit		= mlx4_en_xmit,
+ 	.ndo_select_queue	= mlx4_en_select_queue,
+ 	.ndo_get_stats		= mlx4_en_get_stats,
+-	.ndo_set_multicast_list	= mlx4_en_set_multicast,
++	.ndo_set_rx_mode	= mlx4_en_set_multicast,
+ 	.ndo_set_mac_address	= mlx4_en_set_mac,
+ 	.ndo_validate_addr	= eth_validate_addr,
+ 	.ndo_change_mtu		= mlx4_en_change_mtu,
+-- 
+1.7.8.2
+

@@ -1,0 +1,26 @@
+diff --git a/drivers/net/mlx4/en_main.c b/drivers/net/mlx4/en_main.c
+index 2192503..05d85c5 100644
+--- a/drivers/net/mlx4/en_main.c
++++ b/drivers/net/mlx4/en_main.c
+@@ -96,7 +96,6 @@ static int mlx4_en_get_profile(struct mlx4_en_dev *mdev)
+ 		mlx4_warn(mdev, "UDP RSS is not supported on this device.\n");
+ 		params->udp_rss = 0;
+ 	}
+-	params->num_lro = min_t(int, num_lro , MLX4_EN_MAX_LRO_DESCRIPTORS);
+ 	for (i = 1; i <= MLX4_MAX_PORTS; i++) {
+ 		mlx4_get_port_pfc(mdev->dev, i, &pfctx, &pfcrx);
+ 		params->prof[i].rx_pause = 1;
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 841cfbf..26cf20d 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1371,8 +1371,7 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	dev->features |= NETIF_F_HW_VLAN_TX |
+ 			 NETIF_F_HW_VLAN_RX |
+ 			 NETIF_F_HW_VLAN_FILTER;
+-	if (mdev->profile.num_lro)
+-		dev->features |= NETIF_F_LRO;
++	dev->features |= NETIF_F_GRO;
+ 	if (mdev->LSO_support) {
+ 		dev->features |= NETIF_F_TSO;
+ 		dev->features |= NETIF_F_TSO6;

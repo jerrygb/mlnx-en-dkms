@@ -1,0 +1,86 @@
+From 9a1b954d5167851abc760f11b65bd05b6fd4fb4d Mon Sep 17 00:00:00 2001
+From: Alexander Guller <alexg@mellanox.com>
+Date: Tue, 15 Nov 2011 14:55:34 +0200
+Subject: [PATCH] mlx4_en: fix FB netconsole irq enabled warnings
+
+Netconsole was reporting "netpoll_send_skb(): ethX enabled interrupts in poll"
+because interrupts were enabled after xmit function.
+This happened due to usage of functions from set A which could re-enable
+interrupts. Using functions from set B solved the issue.
+
+Set A:
+	local_irq_disable()/local_irq_enable()
+	spin_lock_irq()/spin_unlock_irq()
+	spin_trylock_irq()/spin_unlock_irq()
+Set B:
+	local_irq_save()/local_irq_restore()
+	spin_lock_irqsave()/spin_unlock_irqrestore()
+	spin_trylock_irqsave()/spin_unlock_irqrestore()
+
+Signed-off-by: Alexander Guller <alexg@mellanox.com>
+Reviewed-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+---
+ drivers/net/mlx4/en_cq.c     |    1 -
+ drivers/net/mlx4/en_netdev.c |    9 ++-------
+ drivers/net/mlx4/en_tx.c     |    5 +++--
+ drivers/net/mlx4/mlx4_en.h   |    1 -
+ 4 files changed, 5 insertions(+), 11 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_cq.c b/drivers/net/mlx4/en_cq.c
+index e491a00..83ea412 100644
+--- a/drivers/net/mlx4/en_cq.c
++++ b/drivers/net/mlx4/en_cq.c
+@@ -55,7 +55,6 @@ int mlx4_en_create_cq(struct mlx4_en_priv *priv,
+ 
+ 	cq->ring = ring;
+ 	cq->is_tx = mode;
+-	spin_lock_init(&cq->lock);
+ 
+ 	err = mlx4_alloc_hwq_res(mdev->dev, &cq->wqres,
+ 				cq->buf_size, 2 * PAGE_SIZE, cq->numa_node);
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 725689c..d27158c 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -417,15 +417,11 @@ static void mlx4_en_netpoll(struct net_device *dev)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+ 	struct mlx4_en_cq *cq;
+-	unsigned long flags;
+ 	int i;
+ 
+ 	for (i = 0; i < priv->rx_ring_num; i++) {
+ 		cq = priv->rx_cq[i];
+-		spin_lock_irqsave(&cq->lock, flags);
+-		napi_synchronize(&cq->napi);
+-		mlx4_en_process_rx_cq_skb(dev, cq, 0);
+-		spin_unlock_irqrestore(&cq->lock, flags);
++		napi_schedule(&cq->napi);
+ 	}
+ }
+ #endif
+@@ -933,8 +929,7 @@ void mlx4_en_stop_port(struct net_device *dev)
+ 	/* Free RX Rings */
+ 	for (i = 0; i < priv->rx_ring_num; i++) {
+ 		mlx4_en_deactivate_rx_ring(priv, priv->rx_ring[i]);
+-		while (test_bit(NAPI_STATE_SCHED, &priv->rx_cq[i]->napi.state))
+-			msleep(1);
++		napi_synchronize(&priv->rx_cq[i]->napi);
+ 		mlx4_en_deactivate_cq(priv, priv->rx_cq[i]);
+ 	}
+ }
+diff --git a/drivers/net/mlx4/mlx4_en.h b/drivers/net/mlx4/mlx4_en.h
+index 6805bd6..7e87ed0 100644
+--- a/drivers/net/mlx4/mlx4_en.h
++++ b/drivers/net/mlx4/mlx4_en.h
+@@ -370,7 +370,6 @@ struct mlx4_en_cq {
+ 	struct mlx4_cq          mcq;
+ 	struct mlx4_hwq_resources wqres;
+ 	int                     ring;
+-	spinlock_t              lock;
+ 	struct net_device      *dev;
+ 	struct napi_struct	napi;
+ 	/* Per-core Tx cq processing support */
+-- 
+1.7.5.4
+

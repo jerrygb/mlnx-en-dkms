@@ -1,0 +1,40 @@
+diff -Naur a/include/scsi/libfc.h b/include/scsi/libfc.h
+--- a/include/scsi/libfc.h	2010-06-23 10:53:54.100487000 -0700
++++ b/include/scsi/libfc.h	2010-06-23 11:17:56.000000000 -0700
+@@ -1014,7 +1018,11 @@
+ int fc_eh_device_reset(struct scsi_cmnd *);
+ int fc_eh_host_reset(struct scsi_cmnd *);
+ int fc_slave_alloc(struct scsi_device *);
++#if 0
+ int fc_change_queue_depth(struct scsi_device *, int qdepth, int reason);
++#else
++int fc_change_queue_depth(struct scsi_device *, int qdepth);
++#endif
+ int fc_change_queue_type(struct scsi_device *, int tag_type);
+ 
+ /*
+diff -Naur a/drivers/scsi/libfc/fc_fcp.c b/drivers/scsi/libfc/fc_fcp.c
+--- a/drivers/scsi/libfc/fc_fcp.c	2010-06-23 10:51:22.541015000 -0700
++++ b/drivers/scsi/libfc/fc_fcp.c	2010-06-23 11:31:12.000000000 -0700
+@@ -2134,6 +2134,13 @@
+ }
+ EXPORT_SYMBOL(fc_slave_alloc);
+ 
++#if 1
++int fc_change_queue_depth(struct scsi_device *sdev, int qdepth)
++{
++	scsi_adjust_queue_depth(sdev, scsi_get_tag_type(sdev), qdepth);
++	return sdev->queue_depth;
++}
++#else
+ /**
+  * fc_change_queue_depth() - Change a device's queue depth
+  * @sdev:   The SCSI device whose queue depth is to change
+@@ -2157,6 +2164,7 @@
+ 	}
+ 	return sdev->queue_depth;
+ }
++#endif
+ EXPORT_SYMBOL(fc_change_queue_depth);
+ 
+ /**

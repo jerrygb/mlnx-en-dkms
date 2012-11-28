@@ -1,0 +1,61 @@
+From 72cdd1d971c0deb1619c5c339270570c43647a78 Mon Sep 17 00:00:00 2001
+From: Eric Dumazet <eric.dumazet@gmail.com>
+Date: Thu, 11 Nov 2010 07:14:07 +0000
+Subject: [PATCH] net: get rid of rtable->idev
+
+It seems idev field in struct rtable has no special purpose, but adding
+extra atomic ops.
+
+We hold refcounts on the device itself (using percpu data, so pretty
+cheap in current kernel).
+
+infiniband case is solved using dst.dev instead of idev->dev
+
+Removal of this field means routing without route cache is now using
+shared data, percpu data, and only potential contention is a pair of
+atomic ops on struct neighbour per forwarded packet.
+
+About 5% speedup on routing test.
+
+Signed-off-by: Eric Dumazet <eric.dumazet@gmail.com>
+Cc: Herbert Xu <herbert@gondor.apana.org.au>
+Cc: Roland Dreier <rolandd@cisco.com>
+Cc: Sean Hefty <sean.hefty@intel.com>
+Cc: Hal Rosenstock <hal.rosenstock@gmail.com>
+Signed-off-by: David S. Miller <davem@davemloft.net>
+---
+ drivers/infiniband/core/addr.c |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/infiniband/core/addr.c b/drivers/infiniband/core/addr.c
+index a5ea1bc..c15fd2e 100644
+--- a/drivers/infiniband/core/addr.c
++++ b/drivers/infiniband/core/addr.c
+@@ -200,7 +200,7 @@ static int addr4_resolve(struct sockaddr_in *src_in,
+ 	src_in->sin_family = AF_INET;
+ 	src_in->sin_addr.s_addr = rt->rt_src;
+ 
+-	if (rt->idev->dev->flags & IFF_LOOPBACK) {
++	if (rt->dst.dev->flags & IFF_LOOPBACK) {
+ 		ret = rdma_translate_ip((struct sockaddr *) dst_in, addr);
+ 		if (!ret)
+ 			memcpy(addr->dst_dev_addr, addr->src_dev_addr, MAX_ADDR_LEN);
+@@ -208,12 +208,12 @@ static int addr4_resolve(struct sockaddr_in *src_in,
+ 	}
+ 
+ 	/* If the device does ARP internally, return 'done' */
+-	if (rt->idev->dev->flags & IFF_NOARP) {
+-		ret = rdma_copy_addr(addr, rt->idev->dev, NULL);
++	if (rt->dst.dev->flags & IFF_NOARP) {
++		ret = rdma_copy_addr(addr, rt->dst.dev, NULL);
+ 		goto put;
+ 	}
+ 
+-	neigh = neigh_lookup(&arp_tbl, &rt->rt_gateway, rt->idev->dev);
++	neigh = neigh_lookup(&arp_tbl, &rt->rt_gateway, rt->dst.dev);
+ 	if (!neigh || !(neigh->nud_state & NUD_VALID)) {
+ 		neigh_event_send(rt->dst.neighbour, NULL);
+ 		ret = -ENODATA;
+-- 
+1.7.0.4
+

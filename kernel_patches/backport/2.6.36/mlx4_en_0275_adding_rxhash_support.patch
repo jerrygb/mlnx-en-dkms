@@ -1,0 +1,68 @@
+From 2bf89b2e7de81c9d8652063d8945624ba958d398 Mon Sep 17 00:00:00 2001
+From: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Date: Mon, 17 Oct 2011 19:33:29 +0200
+Subject: [PATCH 5/6] mlx4_en: Adding rxhash support.
+
+Moving to Toeplitz function in RSS calculation.
+Reporting rxhash in skb.
+
+Signed-off-by: Yevgeny Petrilin <yevgenyp@mellanox.co.il>
+Signed-off-by: Alexander Guller <alexg@mellanox.com>
+---
+ drivers/net/mlx4/en_netdev.c |    1 +
+ drivers/net/mlx4/en_rx.c     |   13 ++++++++++++++
+ 2 files changed, 14 insertions(+), 0 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index c4c4be4..78d776b 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1084,5 +1084,6 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 	/*
+ 	 * Set driver features
+ 	 */
++	dev->features |= NETIF_F_RXHASH;
+ 	dev->features |= NETIF_F_SG;
+ 	dev->features |= NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM;
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index eed2a0a..0e368af 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -618,4 +618,7 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 					gro_skb->ip_summed = CHECKSUM_UNNECESSARY;
+ 					skb_record_rx_queue(gro_skb, cq->ring);
+ 
++					if (dev->features & NETIF_F_RXHASH)
++						gro_skb->rxhash = be32_to_cpu(cqe->immed_rss_invalid);
++
+ 					if (priv->vlgrp && (cqe->vlan_my_qpn &
+@@ -651,6 +654,9 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 		skb->ip_summed = ip_summed;
+ 		skb->protocol = eth_type_trans(skb, dev);
+ 		skb_record_rx_queue(skb, cq->ring);
+ 
++		if (dev->features & NETIF_F_RXHASH)
++			skb->rxhash = be32_to_cpu(cqe->immed_rss_invalid);
++
+ 		/*
+ 		 * Push it up the stack
+@@ -834,4 +840,7 @@ int mlx4_en_config_rss_steer(struct mlx4_en_priv *priv)
+ 	int i, qpn;
+ 	int err = 0;
+ 	int good_qps = 0;
++	static const u32 rsskey[10] = { 0xD181C62C, 0xF7F4DB5B, 0x1983A2FC,
++				0x943E1ADB, 0xD9389E6B, 0xD1039C2C, 0xA74499AD,
++				0x593D56D9, 0xF3253C06, 0x2ADC1FFC};
+ 
+@@ -871,4 +880,8 @@ int mlx4_en_config_rss_steer(struct mlx4_en_priv *priv)
+ 
+ 	rss_context->flags = rss_mask;
+ 
++	rss_context->hash_fn = 1;
++	for (i = 0; i < 10; i++)
++		rss_context->rss_key[i] = rsskey[i];
++
+ 	err = mlx4_qp_to_ready(mdev->dev, &priv->res.mtt, &context,
+-- 
+1.7.7
+

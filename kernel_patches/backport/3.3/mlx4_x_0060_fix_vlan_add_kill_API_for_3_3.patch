@@ -1,0 +1,50 @@
+From 4e0ea80aa58c201471eb2032fbb4fb728d8f61f1 Mon Sep 17 00:00:00 2001
+From: Eugenia Emantayev <eugenia@mellanox.co.il>
+Date: Sun, 13 May 2012 11:15:28 +0300
+Subject: [PATCH] mlx4_en: fix vlan add/kill API proto
+
+Fix according to kernel changes to return int instead of void
+
+Signed-off-by: Eugenia Emantayev <eugenia@mellanox.co.il>
+---
+ drivers/net/mlx4/en_netdev.c |    8 ++++++--
+ 1 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index 1efd9d1..aac042c 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -48,7 +48,7 @@
+ #include "en_port.h"
+ 
+ 
+-static void mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
++static int mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+ 	struct mlx4_en_dev *mdev = priv->mdev;
+@@ -69,9 +69,11 @@ static void mlx4_en_vlan_rx_add_vid(struct net_device *dev, unsigned short vid)
+ 	if (mlx4_register_vlan(mdev->dev, priv->port, vid, &idx))
+ 		en_err(priv, "failed adding vlan %d\n", vid);
+ 	mutex_unlock(&mdev->state_lock);
++
++	return 0;
+ }
+ 
+-static void mlx4_en_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
++static int mlx4_en_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
+ {
+ 	struct mlx4_en_priv *priv = netdev_priv(dev);
+ 	struct mlx4_en_dev *mdev = priv->mdev;
+@@ -95,6 +97,8 @@ static void mlx4_en_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
+ 			en_err(priv, "Failed configuring VLAN filter\n");
+ 	}
+ 	mutex_unlock(&mdev->state_lock);
++
++	return 0;
+ }
+ 
+ u64 mlx4_en_mac_to_u64(u8 *addr)
+-- 
+1.7.8.2
+

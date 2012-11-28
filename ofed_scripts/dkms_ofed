@@ -1,0 +1,188 @@
+#!/bin/bash
+#
+# Copyright (c) 2012 Mellanox Technologies. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
+#
+
+
+usage()
+{
+cat << EOF
+
+Usage: `basename $0` <kernel version> [options]
+
+	Options:
+		get-config:	Get configuration parameters for configure script
+		get-modules:	Get a list of kernel modules that will be compiled
+EOF
+}
+
+
+get-config()
+{
+def_configure_options=" \
+	--with-core-mod \
+	--with-user_mad-mod \
+	--with-user_access-mod \
+	--with-addr_trans-mod \
+	--with-mthca-mod \
+	--with-mlx4-mod \
+	--with-mlx4_en-mod \
+	--with-mlx4_vnic-mod \
+	--with-cxgb3-mod \
+	--with-nes-mod \
+	--with-qib-mod \
+	--with-ipoib-mod \
+	--with-sdp-mod \
+	--with-srp-mod \
+	--with-rds-mod \
+	"
+
+case "$kernelver" in
+	*uek* )
+	;;
+	*el6* )
+	def_configure_options="$def_configure_options --with-iser-mod"
+	;;
+esac
+
+configure_options=${configure_options:-"$def_configure_options"}
+
+echo $configure_options
+}
+
+get-modules()
+{
+	modules=
+
+	for opt in `get-config`
+	do
+		case "$opt" in
+			--with-core-mod )
+			modules="$modules \
+				drivers/infiniband/core/ib_core \
+				drivers/infiniband/core/ib_mad \
+				drivers/infiniband/core/ib_sa \
+				drivers/infiniband/core/ib_cm \
+				drivers/infiniband/core/iw_cm"
+			;;
+			--with-user_mad-mod )
+			modules="$modules \
+				drivers/infiniband/core/ib_umad"
+			;;
+			--with-user_access-mod )
+			modules="$modules \
+				drivers/infiniband/core/ib_uverbs \
+				drivers/infiniband/core/ib_ucm"
+			;;
+			--with-addr_trans-mod )
+			modules="$modules \
+				drivers/infiniband/core/ib_addr \
+				drivers/infiniband/core/rdma_cm \
+				drivers/infiniband/core/rdma_ucm"
+			;;
+			--with-mthca-mod )
+			modules="$modules \
+				drivers/infiniband/hw/mthca/ib_mthca"
+			;;
+			--with-mlx4-mod )
+			modules="$modules \
+				drivers/net/mlx4/mlx4_core \
+				drivers/infiniband/hw/mlx4/mlx4_ib"
+			;;
+			--with-mlx4_en-mod )
+			modules="$modules \
+				drivers/net/mlx4/mlx4_en"
+			;;
+			--with-mlx4_ib-mod )
+			modules="$modules \
+				drivers/infiniband/hw/mlx4/mlx4_ib"
+			;;
+			--with-mlx4_vnic-mod )
+			modules="$modules \
+				drivers/net/mlx4_vnic/mlx4_vnic \
+				drivers/net/mlx4_vnic/mlx4_vnic_helper"
+			;;
+			--with-cxgb3-mod )
+			modules="$modules \
+				drivers/net/cxgb3/cxgb3 \
+				drivers/infiniband/hw/cxgb3/iw_cxgb3"
+			;;
+			--with-nes-mod )
+			modules="$modules \
+				drivers/infiniband/hw/nes/iw_nes"
+			;;
+			--with-qib-mod )
+			modules="$modules \
+				drivers/infiniband/hw/qib/ib_qib"
+			;;
+			--with-ipoib-mod )
+			modules="$modules \
+				drivers/infiniband/ulp/ipoib/ib_ipoib"
+			;;
+			--with-sdp-mod )
+			modules="$modules \
+				drivers/infiniband/ulp/sdp/ib_sdp"
+			;;
+			--with-srp-mod )
+			modules="$modules \
+				drivers/infiniband/ulp/srp/ib_srp"
+			;;
+			--with-rds-mod )
+			modules="$modules \
+				net/rds/rds \
+				net/rds/rds_rdma \
+				net/rds/rds_tcp"
+			;;
+			--with-iser-mod )
+			modules="$modules \
+				drivers/infiniband/ulp/iser/ib_iser"
+			;;
+		esac
+	done
+
+	echo $modules
+}
+
+kernelver=$1
+shift
+
+case "$1" in
+	get-config)
+	get-config
+	;;
+	get-modules)
+	get-modules
+	;;
+	-h|--help)
+	usage
+	exit 0
+	;;
+	*)
+	usage
+	exit 1
+	;;
+esac

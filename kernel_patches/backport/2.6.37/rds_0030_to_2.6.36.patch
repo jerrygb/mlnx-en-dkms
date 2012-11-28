@@ -1,0 +1,59 @@
+Index: ofed_kernel-2.6.36/net/rds/tcp_connect.c
+===================================================================
+--- ofed_kernel-2.6.36.orig/net/rds/tcp_connect.c	2010-11-09 14:40:59.100203850 +0200
++++ ofed_kernel-2.6.36/net/rds/tcp_connect.c	2010-11-09 14:44:49.763275968 +0200
+@@ -90,8 +90,8 @@
+ 
+ 	ret = sock->ops->bind(sock, (struct sockaddr *)&src, sizeof(src));
+ 	if (ret) {
+-		rdsdebug("bind failed with %d at address %u.%u.%u.%u\n",
+-		     ret, NIPQUAD(conn->c_laddr));
++		rdsdebug("bind failed with %d at address %pI4\n",
++		     ret, &conn->c_laddr);
+ 		goto out;
+ 	}
+ 
+@@ -108,8 +108,8 @@
+ 				 O_NONBLOCK);
+ 	sock = NULL;
+ 
+-	rdsdebug("connect to address %u.%u.%u.%u returned %d\n",
+-		 NIPQUAD(conn->c_faddr), ret);
++	rdsdebug("connect to address %pI4 returned %d\n",
++		 &conn->c_faddr, ret);
+ 	if (ret == -EINPROGRESS)
+ 		ret = 0;
+ 
+Index: ofed_kernel-2.6.36/net/rds/tcp_listen.c
+===================================================================
+--- ofed_kernel-2.6.36.orig/net/rds/tcp_listen.c	2010-11-09 14:40:59.324208098 +0200
++++ ofed_kernel-2.6.36/net/rds/tcp_listen.c	2010-11-09 14:47:51.663697076 +0200
+@@ -67,9 +67,9 @@
+ 
+ 	inet = inet_sk(new_sock->sk);
+ 
+-	rdsdebug("accepted tcp %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u\n",
+-		  NIPQUAD(inet->inet_saddr), ntohs(inet->inet_sport),
+-		  NIPQUAD(inet->inet_daddr), ntohs(inet->inet_dport));
++	rdsdebug("accepted tcp %pI4:%u -> %pI4:%u\n",
++		  &inet->inet_saddr, ntohs(inet->inet_sport),
++		  &inet->inet_daddr, ntohs(inet->inet_dport));
+ 
+ 	conn = rds_conn_create(inet->inet_saddr, inet->inet_daddr, &rds_tcp_transport,
+ 			       GFP_KERNEL);
+Index: ofed_kernel-2.6.36/net/rds/tcp_send.c
+===================================================================
+--- ofed_kernel-2.6.36.orig/net/rds/tcp_send.c	2010-11-09 14:40:59.525291259 +0200
++++ ofed_kernel-2.6.36/net/rds/tcp_send.c	2010-11-09 14:48:32.603253363 +0200
+@@ -193,9 +193,9 @@
+ 			rds_tcp_stats_inc(s_tcp_sndbuf_full);
+ 			ret = 0;
+ 		} else {
+-			printk(KERN_WARNING "RDS/tcp: send to %u.%u.%u.%u "
++			printk(KERN_WARNING "RDS/tcp: send to %pI4 "
+ 			       "returned %d, disconnecting and reconnecting\n",
+-			       NIPQUAD(conn->c_faddr), ret);
++			       &conn->c_faddr, ret);
+ 			rds_conn_drop(conn);
+ 		}
+ 	}

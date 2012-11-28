@@ -1,0 +1,13 @@
+Index: ofa_kernel-1.5.2/drivers/infiniband/core/uverbs_main.c
+===================================================================
+--- ofa_kernel-1.5.2.orig/drivers/infiniband/core/uverbs_main.c	2010-10-05 10:37:16.000000000 +0200
++++ ofa_kernel-1.5.2/drivers/infiniband/core/uverbs_main.c	2010-10-05 10:39:45.000000000 +0200
+@@ -557,7 +557,7 @@
+ 	 * system call on a uverbs file, which will already have a
+ 	 * module reference.
+ 	 */
+-	filp = alloc_file(uverbs_event_mnt, dget(uverbs_event_mnt->mnt_root),
++	filp = alloc_file(dget(uverbs_event_mnt->mnt_root),
+ 			  FMODE_READ, fops_get(&uverbs_event_fops));
+ 	if (!filp) {
+ 		ret = -ENFILE;

@@ -1,0 +1,22 @@
+Index: ofed_kernel/drivers/infiniband/ulp/ipoib/ipoib_fs.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/ipoib/ipoib_fs.c	2011-01-09 10:47:02.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/ipoib/ipoib_fs.c	2011-01-09 12:00:36.333928000 +0200
+@@ -139,7 +139,7 @@
+ 		return ret;
+ 
+ 	seq = file->private_data;
+-	seq->private = inode->i_private;
++	seq->private = inode->u.generic_ip;
+ 
+ 	return 0;
+ }
+@@ -245,7 +245,7 @@
+ 		return ret;
+ 
+ 	seq = file->private_data;
+-	seq->private = inode->i_private;
++	seq->private = inode->u.generic_ip;
+ 
+ 	return 0;
+ }

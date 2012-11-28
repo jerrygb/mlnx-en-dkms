@@ -1,0 +1,68 @@
+From 807ad638557bc65a7581a5339bed760ea52d0582 Mon Sep 17 00:00:00 2001
+From: Alex Tabachnik <alext@mellanox.com>
+Date: Mon, 25 Jun 2012 14:51:59 +0300
+Subject: [PATCH V8 2/2] IB/iser: add support for CQ moderation
+
+   Added two modules param iser_cq_completions and iser_cq_timeout
+   which if BOTH set cause the driver to apply CQ moderation on the RX CQ.
+
+   N = iser_cq_completions counts packets (SCSI responses)
+   T = iser_cq_timeout counts micro-seconds
+
+   When moderation is active, the CQ will issue interrupt after max {N,T}
+
+   Default is 0 for both so there's no moderation
+
+   Signed-off-by: Or Gerlitz <ogerlitz@mellanox.com>
+   Signed-off-by: Alex Tabachnik <alext@mellanox.com>
+---
+ drivers/infiniband/ulp/iser/iser_verbs.c |   22 +++++++++++++++++++++-
+ 1 files changed, 21 insertions(+), 1 deletions(-)
+
+Index: ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/iser/iser_verbs.c
++++ ofed_kernel/drivers/infiniband/ulp/iser/iser_verbs.c
+@@ -41,6 +41,16 @@ int iser_rx_cqs  = 1;
+ module_param_named(iser_rx_cqs, iser_rx_cqs, int, 0644);
+ MODULE_PARM_DESC(iser_rx_cqs, "number of RX CQs to process SCSI responses (default:1)");
+ 
++int iser_cq_completions = 0;
++int iser_cq_timeout     = 0;
++
++module_param_named(cq_completions, iser_cq_completions, int, 0644);
++MODULE_PARM_DESC(cq_completions, "moderate CQ to N completions if N > 0 (default:disabled)");
++
++module_param_named(cq_timeout, iser_cq_timeout, int, 0644);
++MODULE_PARM_DESC(cq_timeout, "moderate CQ to max T micro-sec if T > 0 (default:disabled)");
++
++
+ #define ISCSI_ISER_MAX_CONN	8
+ #define ISER_MAX_RX_CQ_LEN	(ISER_QP_MAX_RECV_DTOS * ISCSI_ISER_MAX_CONN)
+ #define ISER_MAX_TX_CQ_LEN	(ISER_QP_MAX_REQ_DTOS  * ISCSI_ISER_MAX_CONN)
+@@ -74,7 +84,7 @@ static void iser_event_handler(struct ib
+  */
+ static int iser_create_device_ib_res(struct iser_device *device)
+ {
+-	int i, j;
++	int i, j, ret;
+ 	struct iser_cq_desc *cq_desc;
+ 
+ 	iser_rx_cqs = min(min(iser_rx_cqs, ISER_MAX_CQ),device->ib_device->num_comp_vectors); 
+@@ -116,6 +126,16 @@ static int iser_create_device_ib_res(str
+ 
+ 		device->allocated_cq_count++;
+ 
++		if (iser_cq_completions && iser_cq_timeout) {
++			iser_err("applying CQ moderation - to be max {%d completions, %d us timeout} \n",
++				iser_cq_completions, iser_cq_timeout);
++			ret = ib_modify_cq(device->rx_cq[i], iser_cq_completions, iser_cq_timeout);
++			if (ret == -ENOSYS)
++				iser_err("device does not support CQ moderation\n");
++			else
++				iser_err("failed modifying RX CQ err %d\n", ret);
++		}
++
+ 		tasklet_init(&device->cq_tasklet[i],
+ 			     iser_cq_tasklet_fn,
+ 			(unsigned long)&cq_desc[i]);

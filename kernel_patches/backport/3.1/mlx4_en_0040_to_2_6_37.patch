@@ -1,0 +1,22 @@
+Index: ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/net/mlx4/en_ethtool.c
+===================================================================
+--- ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check.orig/drivers/net/mlx4/en_ethtool.c	2011-06-17 21:49:32.000000000 +0300
++++ ofa_1_5_dev_kernel-20110617-2130_linux-2.6.37_check/drivers/net/mlx4/en_ethtool.c	2011-06-17 21:51:06.000000000 +0300
+@@ -77,7 +77,7 @@ static int mlx4_en_set_tso(struct net_de
+ 		if (priv->vlgrp) {
+ 			int i;
+ 			struct net_device *vdev;
+-			for (i = 0; i < VLAN_GROUP_ARRAY_LEN; i++) {
++			for (i = 0; i < VLAN_N_VID; i++) {
+ 				vdev = vlan_group_get_device(priv->vlgrp, i);
+ 				if (vdev) {
+ 					vdev->features |= (NETIF_F_TSO | NETIF_F_TSO6);
+@@ -94,7 +94,7 @@ static int mlx4_en_set_tso(struct net_de
+ 		if (priv->vlgrp) {
+ 			int i;
+ 			struct net_device *vdev;
+-			for (i = 0; i < VLAN_GROUP_ARRAY_LEN; i++) {
++			for (i = 0; i < VLAN_N_VID; i++) {
+ 				vdev = vlan_group_get_device(priv->vlgrp, i);
+ 				if (vdev) {
+ 					vdev->features &= ~(NETIF_F_TSO | NETIF_F_TSO6);

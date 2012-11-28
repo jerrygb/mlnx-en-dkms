@@ -1,0 +1,17 @@
+diff --git a/drivers/net/mlx4/en_tx.c b/drivers/net/mlx4/en_tx.c
+index 9e11852..729afe1 100644
+--- a/drivers/net/mlx4/en_tx.c
++++ b/drivers/net/mlx4/en_tx.c
+@@ -672,7 +672,11 @@ u16 mlx4_en_select_queue(struct net_device *dev, struct sk_buff *skb)
+ 
+ static void mlx4_bf_copy(unsigned long *dst, unsigned long *src, unsigned bytecnt)
+ {
+-	__iowrite64_copy(dst, src, bytecnt / 8);
++	while (bytecnt > 0) {
++		*dst++ = *src++;
++		*dst++ = *src++;
++		bytecnt -= 2 * sizeof (long);
++	}
+ }
+ 
+ int mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)

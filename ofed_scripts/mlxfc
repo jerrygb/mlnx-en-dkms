@@ -1,0 +1,281 @@
+#!/bin/bash
+
+#
+# Copyright (c) 2006 Mellanox Technologies. All rights reserved.
+#
+# This Software is licensed under one of the following licenses:
+#
+# 1) under the terms of the "Common Public License 1.0" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/cpl.php.
+#
+# 2) under the terms of the "The BSD License" a copy of which is
+#    available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/bsd-license.php.
+#
+# 3) under the terms of the "GNU General Public License (GPL) Version 2" a
+#    copy of which is available from the Open Source Initiative, see
+#    http://www.opensource.org/licenses/gpl-license.php.
+#
+# Licensee has the right to choose one of the above licenses.
+#
+# Redistributions of source code must retain the above copyright
+# notice and one of the license notices.
+#
+# Redistributions in binary form must reproduce both the above copyright
+# notice, one of the license notices in the documentation
+# and/or other materials provided with the distribution.
+#
+#
+
+dcbx_pid_file=/var/run/dcbxd.pid
+
+CONFIG="/etc/mlxfc/mlxfc.conf"
+if [ ! -f $CONFIG ]; then
+    echo No mlxfc configuration found
+    exit 0
+fi
+
+. $CONFIG
+
+ACTION=$1
+shift
+
+# Boot controlled by openibd and openib.conf
+
+## Only use ONBOOT option if called by a runlevel directory.
+#base=${0##*/}
+#link=${base#*[SK][0-9][0-9]}
+#
+#if [ $link == $base ] ; then
+#    ONBOOT=yes
+#fi
+#
+## Check if mlxfc configured to start automatically
+#if [ "X${ONBOOT}" != "Xyes" ]; then
+#    exit 0
+#fi
+
+# Get a sane screen width
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+[ -z "${CONSOLETYPE:-}" ] && [ -x /sbin/consoletype ] && CONSOLETYPE="`/sbin/consoletype`"
+
+if [ -f /etc/sysconfig/i18n -a -z "${NOLOCALE:-}" ] ; then
+	. /etc/sysconfig/i18n
+	if [ "$CONSOLETYPE" != "pty" ]; then
+		case "${LANG:-}" in
+			ja_JP*|ko_KR*|zh_CN*|zh_TW*)
+				export LC_MESSAGES=en_US
+				;;
+			*)
+				export LANG
+				;;
+		esac
+	else
+		export LANG
+	fi
+fi
+
+# Read in our configuration
+if [ -z "${BOOTUP:-}" ]; then
+	if [ -f /etc/sysconfig/init ]; then
+		. /etc/sysconfig/init
+	else
+		# This all seem confusing? Look in /etc/sysconfig/init,
+		# or in /usr/doc/initscripts-*/sysconfig.txt
+		BOOTUP=color
+		RES_COL=60
+		MOVE_TO_COL="echo -en \\033[${RES_COL}G"
+		SETCOLOR_SUCCESS="echo -en \\033[1;32m"
+		SETCOLOR_FAILURE="echo -en \\033[1;31m"
+		SETCOLOR_WARNING="echo -en \\033[1;33m"
+		SETCOLOR_NORMAL="echo -en \\033[0;39m"
+		LOGLEVEL=1
+	fi
+	if [ "$CONSOLETYPE" = "serial" ]; then
+		BOOTUP=serial
+		MOVE_TO_COL=
+		SETCOLOR_SUCCESS=
+		SETCOLOR_FAILURE=
+		SETCOLOR_WARNING=
+		SETCOLOR_NORMAL=
+	fi
+fi
+
+if [ "${BOOTUP:-}" != "verbose" ]; then
+	INITLOG_ARGS="-q"
+else
+	INITLOG_ARGS=
+fi
+
+echo_success() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "[  "
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_SUCCESS
+	echo -n $"OK"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "  ]"
+	echo -e "\r"
+	return 0
+}
+
+echo_done() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "[  "
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n $"done"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "  ]"
+	echo -e "\r"
+	return 0
+}
+
+echo_failure() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "["
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_FAILURE
+	echo -n $"FAILED" 
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "]"
+	echo -e "\r"
+	return 1
+}
+
+echo_warning() {
+	echo -n $@
+	[ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+	echo -n "["
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_WARNING
+	echo -n $"WARNING"
+	[ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+	echo -n "]"
+	echo -e "\r"
+	return 1
+}
+# If module $1 is loaded return - 0 else - 1
+is_module()
+{
+    if [ -d /sys/module/$1 ]; then return 0; fi
+    return 1
+}
+
+# If module $1 has refcnt return 0 (true) otherwise, return 1 (false)
+is_ref()
+{
+    local RC
+    if is_module $1; then
+        cat /sys/module/"$1"/refcnt | grep -w 0  > /dev/null 2>&1
+        RC=$?
+        if [ "${RC}" -eq "1" ]; then
+    	    echo "$1" has references
+	    RC=0
+        else
+    	    RC=1
+        fi 
+        return $RC    
+    fi
+    return 1
+}
+
+load_module_and_report()
+{
+    msg="$1"
+    module=$2
+    /sbin/modprobe $module > /dev/null 2>&1
+    my_rc=$?
+    if [ $my_rc -ne 0 ]; then
+	echo_failure $msg
+	exit 1 
+    else
+	echo_success $msg
+    fi
+}
+
+start_dcbxd()
+{
+    if [ -z "$DCBX_IFS" ]; then return; fi
+    if [ -z "$DCBX_VLAN" ]; then echo_failure "Starting dcbx daemon on interfaces $DCBX_IFS:"; echo "When using DCBX, please set DCBX_VLAN"; exit; fi
+    dcbxd -n $DCBX_VLAN -q $DCBX_IFS &
+    my_rc=$?
+    echo $! > $dcbx_pid_file
+    if [ $my_rc -ne 0 ]; then
+        echo_failure "Starting dcbx daemon on interfaces $DCBX_IFS:"
+        exit 1
+    else
+        echo_success "Starting dcbx daemon on interfaces $DCBX_IFS:"
+    fi
+}
+
+stop_dcbxd()
+{
+    if [ -e $dcbx_pid_file ]; then
+        dcbx_pid=`cat $dcbx_pid_file`
+    if [ ! -e /proc/$dcbx_pid/exe ]; then return; fi
+    exe=`readlink /proc/$dcbx_pid/exe`
+    if [ -z $exe ]; then return; fi
+        exe_basename=`readlink /proc/$dcbx_pid/exe | xargs basename`
+
+        if [ "$exe_basename" = "dcbxd" ]; then
+               kill -9 $dcbx_pid
+        fi;
+    fi
+}
+
+start()
+{
+    if [ "X$FCOE" == "Xyes" ]; then
+	module=mlx4_fc
+        load_module_and_report "Loading Mellanox FCoE driver [$module]: " $module
+	start_dcbxd
+    fi
+    if [ "X$FCOIB" == "Xyes" ]; then
+        module=mlx4_fcoib
+        load_module_and_report "Loading Mellanox FCoIB driver [$module]: " $module
+        /sbin/mlx4_fcoib_conf start
+    fi
+}
+
+stop()
+{
+    local RC
+    if [ "X$FCOE" == "Xyes" ]; then
+	stop_dcbxd
+    fi
+    if is_ref mlx4_fcoib ; then
+	echo_warning "Try flushing multipath devices using 'multipath -F'"
+    fi
+    /sbin/modprobe -r mlx4_fcoib > /dev/null 2>&1
+    if is_ref mlx4_fc ; then
+	echo_warning "Try flushing multipath devices using 'multipath -F'"
+    fi
+    /sbin/modprobe -r mlx4_fc > /dev/null 2>&1
+    /sbin/modprobe -r libfcoe > /dev/null 2>&1
+    /sbin/modprobe -r libfc > /dev/null 2>&1
+    echo_success "Unloading FC drivers:"
+}
+
+case $ACTION in
+        start)
+                start
+                ;;
+        stop)
+                stop
+                ;;
+        restart)
+                stop
+                start
+                ;;
+        *)
+                echo 
+                echo "Usage: `basename $0` {start|stop|restart}"
+                echo
+                exit 1
+                ;;
+esac
+
+RC=$?
+exit $RC

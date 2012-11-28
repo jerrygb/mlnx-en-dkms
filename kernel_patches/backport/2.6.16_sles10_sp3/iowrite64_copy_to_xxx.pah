@@ -1,0 +1,17 @@
+Index: ofa_1_5_dev_kernel-20101102-1457_linux-2.6.16.60-0.54.5-smp_check/drivers/infiniband/hw/mlx4/qp.c
+===================================================================
+--- ofa_1_5_dev_kernel-20101102-1457_linux-2.6.16.60-0.54.5-smp_check.orig/drivers/infiniband/hw/mlx4/qp.c	2010-11-02 15:32:34.000000000 +0200
++++ ofa_1_5_dev_kernel-20101102-1457_linux-2.6.16.60-0.54.5-smp_check/drivers/infiniband/hw/mlx4/qp.c	2010-11-02 15:35:19.000000000 +0200
+@@ -1920,7 +1920,11 @@ static int lay_inline_data(struct mlx4_i
+  */
+ static void mlx4_bf_copy(unsigned long *dst, unsigned long *src, unsigned bytecnt)
+ {
+-	__iowrite64_copy(dst, src, bytecnt / 8);
++	while (bytecnt > 0) {
++                *dst++ = *src++;
++                *dst++ = *src++;
++                bytecnt -= 2 * sizeof (long);
++        }
+ }
+ 
+ int mlx4_ib_post_send(struct ib_qp *ibqp, struct ib_send_wr *wr,

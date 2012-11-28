@@ -1,0 +1,18 @@
+Index: ofed_kernel-2.6.36/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c
+===================================================================
+--- ofed_kernel-2.6.36.orig/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c	2011-11-01 17:14:29.000000000 +0200
++++ ofed_kernel-2.6.36/drivers/infiniband/ulp/ipoib/ipoib_ethtool.c	2011-11-01 17:41:51.166668000 +0200
+@@ -218,11 +218,11 @@ static void ipoib_get_ringparam(struct n
+ 	param->rx_pending = ipoib_recvq_size;
+ 	param->tx_pending = ipoib_sendq_size;
+ }
+-int ipoib_set_flags(struct net_device *dev, u32 data)
++int ipoib_set_flags(struct net_device *dev, u32 data, u32 supported)
+ {
+ 	struct ipoib_dev_priv *priv = netdev_priv(dev);
+ 
+-	ethtool_op_set_flags(dev, data);
++	ethtool_op_set_flags(dev, data, supported);
+ 	/*no support in LRO with 4k mtu.*/
+ 	if (ipoib_ud_need_sg(priv->max_ib_mtu) && (data & NETIF_F_LRO)) {
+ 

@@ -1,0 +1,13 @@
+Index: ofed_kernel/drivers/infiniband/ulp/sdp/sdp_proc.c
+===================================================================
+--- ofed_kernel.orig/drivers/infiniband/ulp/sdp/sdp_proc.c	2011-01-09 10:47:12.000000000 +0200
++++ ofed_kernel/drivers/infiniband/ulp/sdp/sdp_proc.c	2011-01-09 12:06:07.110813000 +0200
+@@ -723,7 +723,7 @@
+ 
+ static int sdp_ssk_hist_seq_open(struct inode *inode, struct file *file)
+ {
+-	struct sock *sk = inode->i_private;
++	struct sock *sk = inode->u.generic_ip;
+ 
+ 	return single_open(file, sdp_ssk_hist_seq_show, sk);
+ }

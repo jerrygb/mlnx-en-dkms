@@ -1,0 +1,51 @@
+From 99987bea474ceca8ec6fb05f81d7d188634cdffd Mon Sep 17 00:00:00 2001
+From: Roland Dreier <rolandd@cisco.com>
+Date: Mon, 22 Jun 2009 23:04:13 -0700
+Subject: [PATCH] IB/mthca: Replace dma_sync_single() use with proper functions
+
+dma_sync_single() is deprecated now, and the use in mthca is wrong:
+there should be a dma_sync_single_for_cpu() before touching the memory
+from the CPU, and a dma_sync_single_for_device() afterwards.  Fix 
+this, prompted by a kick in the pants from a patch from FUJITA
+Tomonori <fujita.tomonori@lab.ntt.co.jp>.
+
+Signed-off-by: Roland Dreier <rolandd@cisco.com>
+
+Index: ofed_kernel-2.6.35/drivers/infiniband/hw/mthca/mthca_mr.c
+===================================================================
+--- ofed_kernel-2.6.35.orig/drivers/infiniband/hw/mthca/mthca_mr.c	2010-11-07 11:10:44.344409335 +0200
++++ ofed_kernel-2.6.35/drivers/infiniband/hw/mthca/mthca_mr.c	2010-11-07 11:12:09.629667974 +0200
+@@ -352,10 +352,14 @@
+ 
+ 	BUG_ON(!mtts);
+ 
++	dma_sync_single_for_cpu(&dev->pdev->dev, dma_handle,
++				list_len * sizeof (u64), DMA_TO_DEVICE);
++
+ 	for (i = 0; i < list_len; ++i)
+ 		mtts[i] = cpu_to_be64(buffer_list[i] | MTHCA_MTT_FLAG_PRESENT);
+ 
+-	dma_sync_single(&dev->pdev->dev, dma_handle, list_len * sizeof (u64), DMA_TO_DEVICE);
++	dma_sync_single_for_device(&dev->pdev->dev, dma_handle,
++				   list_len * sizeof (u64), DMA_TO_DEVICE);
+ }
+ 
+ int mthca_write_mtt(struct mthca_dev *dev, struct mthca_mtt *mtt,
+@@ -803,12 +807,15 @@
+ 
+ 	wmb();
+ 
++	dma_sync_single_for_cpu(&dev->pdev->dev, fmr->mem.arbel.dma_handle,
++				list_len * sizeof(u64), DMA_TO_DEVICE);
++
+ 	for (i = 0; i < list_len; ++i)
+ 		fmr->mem.arbel.mtts[i] = cpu_to_be64(page_list[i] |
+ 						     MTHCA_MTT_FLAG_PRESENT);
+ 
+-	dma_sync_single(&dev->pdev->dev, fmr->mem.arbel.dma_handle,
+-			list_len * sizeof(u64), DMA_TO_DEVICE);
++	dma_sync_single_for_device(&dev->pdev->dev, fmr->mem.arbel.dma_handle,
++				   list_len * sizeof(u64), DMA_TO_DEVICE);
+ 
+ 	fmr->mem.arbel.mpt->key    = cpu_to_be32(key);
+ 	fmr->mem.arbel.mpt->lkey   = cpu_to_be32(key);

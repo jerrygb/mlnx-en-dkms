@@ -1,0 +1,18 @@
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/libfcoe.c ofa_kernel-1.5.1/drivers/scsi/fcoe/libfcoe.c
+--- ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/libfcoe.c	2010-06-24 13:48:12.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/fcoe/libfcoe.c	2010-06-24 13:57:59.000000000 -0700
+@@ -42,6 +42,7 @@
+ 
+ #include <scsi/libfc.h>
+ #include <scsi/libfcoe.h>
++#include <scsi/fc_encode.h>
+ 
+ MODULE_AUTHOR("Open-FCoE.org");
+ MODULE_DESCRIPTION("FIP discovery protocol support for FCoE HBAs");
+diff -Naur ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/Makefile ofa_kernel-1.5.1/drivers/scsi/fcoe/Makefile
+--- ofa_kernel-1.5.1.configured/drivers/scsi/fcoe/Makefile	2010-06-24 13:48:05.000000000 -0700
++++ ofa_kernel-1.5.1/drivers/scsi/fcoe/Makefile	2010-06-24 13:52:48.000000000 -0700
+@@ -1,2 +1,2 @@
+-obj-$(CONFIG_FCOE) += fcoe.o
++#obj-$(CONFIG_FCOE) += fcoe.o
+ obj-$(CONFIG_LIBFCOE) += libfcoe.o

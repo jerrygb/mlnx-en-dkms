@@ -1,0 +1,92 @@
+diff --git a/drivers/net/mlx4/en_main.c b/drivers/net/mlx4/en_main.c
+index e87a738..6bac66a 100644
+--- a/drivers/net/mlx4/en_main.c
++++ b/drivers/net/mlx4/en_main.c
+@@ -73,9 +73,13 @@ MLX4_EN_PARM_INT(num_rx_rings, MAX_RX_RINGS,
+ MLX4_EN_PARM_BOOL(udp_rss, true,
+ 		 "Enable RSS for incomming UDP traffic or disabled (0)");
+ 
++#ifdef CONFIG_PPC
++static int num_lro = 0;
++#else
+ /* Number of LRO sessions per Rx ring */
+ MLX4_EN_PARM_INT(num_lro, MLX4_EN_MAX_LRO_DESCRIPTORS,
+ 		 "Number of LRO sessions per ring or disabled (0)");
++#endif
+ 
+ MLX4_EN_PARM_BOOL(use_tx_polling, true, "Use polling for TX processing (default 1)");
+ 
+diff --git a/drivers/net/mlx4/en_netdev.c b/drivers/net/mlx4/en_netdev.c
+index d7dd668..878e71a 100644
+--- a/drivers/net/mlx4/en_netdev.c
++++ b/drivers/net/mlx4/en_netdev.c
+@@ -1390,6 +1390,9 @@ int mlx4_en_init_netdev(struct mlx4_en_dev *mdev, int port,
+ 			 NETIF_F_HW_VLAN_FILTER;
+ 	if (mdev->profile.num_lro)
+ 		dev->features |= NETIF_F_LRO;
++#ifdef CONFIG_PPC
++	dev->features |= NETIF_F_GRO;
++#endif
+ 	if (mdev->LSO_support) {
+ 		dev->features |= NETIF_F_TSO;
+ 		dev->features |= NETIF_F_TSO6;
+diff --git a/drivers/net/mlx4/en_rx.c b/drivers/net/mlx4/en_rx.c
+index 0120b03..bd8ec0c 100644
+--- a/drivers/net/mlx4/en_rx.c
++++ b/drivers/net/mlx4/en_rx.c
+@@ -568,7 +568,9 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 	int size = cq->size;
+ 	struct mlx4_cqe *buf = cq->buf;
+ 	u32 csum_none = 0, csum_ok = 0;
++#ifndef CONFIG_PPC
+ 	bool lro = !!(dev->features & NETIF_F_LRO);
++#endif
+ 
+ 	if (!priv->port_up)
+ 		return 0;
+@@ -605,10 +607,11 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 			if ((cqe->status & cpu_to_be16(MLX4_CQE_STATUS_IPOK)) &&
+ 			    (cqe->checksum == 0xffff)) {
+ 				csum_ok++;
++#ifndef CONFIG_PPC
+ 				if (lro && !mlx4_en_lro_rx(priv, ring, rx_desc,
+ 							   skb_frags, length, cqe, index))
+                                         goto next;
+-
++#endif
+ 				/* LRO not possible, complete processing here */
+ 				ip_summed = CHECKSUM_UNNECESSARY;
+ 				INC_PERF_COUNTER(priv->pstats.lro_misses);
+@@ -647,24 +650,31 @@ int mlx4_en_process_rx_cq(struct net_device *dev, struct mlx4_en_cq *cq, int bud
+ 			vlan_hwaccel_receive_skb(skb, priv->vlgrp,
+ 						 be16_to_cpu(cqe->sl_vid));
+ 		else
++#ifdef CONFIG_PPC
++			napi_gro_receive(&cq->napi, skb);
++#else
+ 			netif_receive_skb(skb);
++#endif
+ 
+ next:
+ 		++cons_index;
+ 		index = cons_index & size_mask;
+ 		cqe = &buf[(index << factor) + factor];
+ 		if (++polled == budget) {
++#ifndef CONFIG_PPC
+ 			/* We are here because we reached the NAPI budget -
+ 			 * flush only pending LRO sessions */
+ 			if (lro)
+ 				mlx4_en_lro_flush(priv, ring, 0);
++#endif
+ 			goto out;
+ 		}
+ 	}
+-
++#ifndef CONFIG_PPC
+ 	/* If CQ is empty flush all LRO sessions unconditionally */
+ 	if (lro)
+ 		mlx4_en_lro_flush(priv, ring, 1);
++#endif
+ 
+ out:
+ 	AVG_PERF_COUNTER(priv->pstats.rx_coal_avg, polled);
